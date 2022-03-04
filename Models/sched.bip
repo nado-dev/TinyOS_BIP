@@ -1,29 +1,34 @@
-@cpp(include="stdio.h")
+@cpp(src="ext-cpp/my_helper.cpp", include="my_helper.hpp")
 package sched
 	// Constants definition
 	const data int TASK_BUFFER_LIMIT = 255
+	const data int MAX_TASK_EXECUTION_STEP = 10
 
 	// helper function definition
 	extern function printf(string)
 	extern function printf(string, int)
+	extern function printf(string, int, int)
+	extern function int get_rand()
+	extern function init_seed()
 	
 	// Port dinfinition
 	port type Port_t()
-
+	port type Port_ta (int appid)
+	port type Port_tta(int tid, int appid)
 
 	// connectors
 	// boradcast
-
 	connector type Conn2(Port_t p1, Port_t p2)
 		define p1 p2	
 	end
 	
-	connector type TBegConn3(Port_t sched ,Port_t p1, Port_t p2)
-		define sched' p1 p2
+	connector type Conn3_Post(Port_ta app ,Port_t ts, Port_tta th_bound)	
+		define app ts th_bound
+		on app ts th_bound down {th_bound.tid = get_rand(); th_bound.appid = app.appid;printf("------%d\n", th_bound.tid);}
 	end
 
 	// rendezvous
-	connector type TFinConn3(Port_t sched ,Port_t p1, Port_t p2)
+	connector type RConn3(Port_t sched ,Port_t p1, Port_t p2)
 		define sched p1 p2
 	end
 
@@ -36,14 +41,15 @@ package sched
    		 // port instance define
    		export port Port_t beg()
   		export port Port_t fin()
-    		export port Port_t post()
+    		export port Port_t post()	
+		port Port_t tick() // spinning	
 
     		// place define
     		place FREE, BUSY
 
     		initial to FREE do {
 			task_count = 0;
-        			printf("[TS] initial to FREE  %d\n");
+        			printf("[TS] initial to FREE  %d\n", task_count);
     		}
 
    		on beg from FREE to BUSY
@@ -70,6 +76,12 @@ package sched
     		on fin from BUSY to FREE do {
 			printf("[TS] on fin from BUSY to FREE do tc:%d\n", task_count);
 		}	
+
+		on tick from FREE to FREE
+		provided (task_count == 0)
+		do {
+			printf("[TS] TS is free now, spinnig\n");
+		}
 	end
 
 
@@ -78,55 +90,46 @@ package sched
 		// variable difination
 		data int e_count = 0
 		data int stack_size = 0
+		data int is_es_idle = 0
 
 		// exported port defination
 		export port Port_t beg()
 		export port Port_t pre()
 		export port Port_t res()
-		// internal port difination
 		export port Port_t fin()
 		export port Port_t sig()
-
+		// internal port difination
+	
 		// state defination
 		place IDLE, ACCEPT, PREEMPT, BUSY1, BUSY2
 
 		// behaviour defination
 		initial to IDLE do {
+			is_es_idle = 1;
 			e_count = 0;
 			stack_size = 0;
-			printf("[ES] initial to IDLE\n");
-			printf("ec: %d\n", e_count);
-			printf("ss: %d\n", stack_size);
-
+			printf("[ES] initial to IDLE, ec: %d, ss: %d \n", e_count, stack_size);
 		}
 
 		on sig from IDLE to ACCEPT do {
-			printf("[ES] on sig from IDLE to ACCEPT\n");
-			printf("ec: %d\n", e_count);
-			printf("ss: %d\n", stack_size);
+			printf("[ES] on sig from IDLE to ACCEPT, ec: %d, ss: %d\n", e_count, stack_size);
 		} 
 
 		on pre from ACCEPT to PREEMPT do {
 			stack_size = stack_size + 1;
-			printf("[ES] on pre from ACCEPT to PREEMPT\n");
-			printf("ec: %d\n", e_count);
-			printf("ss: %d\n", stack_size);
+			printf("[ES] on pre from ACCEPT to PREEMPT, ec: %d, ss: %d\n", e_count, stack_size);
 		}
 
 		on beg from PREEMPT to BUSY1 do {
 			e_count = e_count + 1;
-			printf("[ES] on beg from PREEMPT to BUSY1\n");
-			printf("ec: %d\n", e_count);
-			printf("ss: %d\n", stack_size);
+			printf("[ES] on beg from PREEMPT to BUSY1, ec: %d, ss: %d\n", e_count, stack_size);
 		}
 		
 		on fin from BUSY1 to IDLE 
 		provided(stack_size == 0)
 		do {
 			e_count = e_count - 1;
-			printf("[ES] on fin from BUSY1 to IDLE\n");
-			printf("ec: %d\n", e_count);
-			printf("ss: %d\n", stack_size);
+			printf("[ES] on fin from BUSY1 to IDLE, ec: %d, ss: %d\n", e_count, stack_size);
 		}
 		
 		on fin from BUSY1 to BUSY2
@@ -142,25 +145,25 @@ package sched
 		on res from BUSY2 to BUSY1
 		provided(e_count > 0)
 		do {
-			printf("[ES] on res from BUSY2 to BUSY1\n");
-			printf("ec: %d\n", e_count);
-			printf("ss: %d\n", stack_size);
+			printf("[ES] on res from BUSY2 to BUSY1, ec: %d, ss: %d\n", e_count, stack_size);
 		}
 
 		on res from BUSY2 to IDLE
 		provided(e_count ==0)
 		do {
-			printf("[ES] on res from BUSY2 to IDLE\n");
-			printf("ec: %d\n", e_count);
-			printf("ss: %d\n", stack_size);
+			printf("[ES] on res from BUSY2 to IDLE, ec: %d, ss: %d\n", e_count, stack_size);
 		}
-
 	end	
 
 	// atom type of Task Handler
-	atom type TaskHandler(int tid)
+	atom type TaskHandler()
 		
+		data int exe_step = 0
+		data int tid = 0
+		data int appid = 0
+
 		// port definition 
+		export port Port_tta init(tid, appid)
 		export port Port_t beg()
 		export port Port_t fin()
 		export port Port_t pre()
@@ -168,19 +171,26 @@ package sched
 		port Port_t exe()
 
 		// state definition
-		place IDLE, EXE, SUSP
+		place IDLE, BOUND, EXE, SUSP
 
 		// behavior definition
 		initial to IDLE do {
-			printf("[TH] initial to IDLE, tid:%d\n", tid);
+			printf("[TH] initial to IDLE\n");
+		}
+
+		on init from IDLE to BOUND do {
+			printf("[TH] on init from IDLE to BOUND do , appid: %d, tid: %d\n", appid, tid);
 		}
 		
-		on beg from IDLE to EXE do{
+		on beg from BOUND to EXE do{
 			printf("[TH] on begin from IDLE to EXE, tid:%d\n", tid);
 		} 
 
 		// this is internal
-		on exe from EXE to EXE do {
+		on exe from EXE to EXE 
+		provided(exe_step < MAX_TASK_EXECUTION_STEP)
+		do {
+			exe_step = exe_step + 1;
 			printf("[TH] Task is executing, tid:%d\n", tid);
 		}
 
@@ -217,17 +227,22 @@ package sched
 	//end
 
 	// user defined software component
-	atom type UserApplication(int appid)
+	atom type UserApplication(int _appid, int task_count)
+		
+		data int posted_task_count = 0
+		data int appid
 		
 		// port definition
-		export port Port_t post()
+		export port Port_ta post(appid)
 		port Port_t start()
-		port Port_t res()
+		port Port_t ret()
 		port Port_t fin()
 		
 		place INIT, POSTING, RUNNING, FIN
 
 		initial to INIT do {
+			init_seed();
+			appid = _appid;
 			printf("[UA] APP %d init\n", appid);
 		} 
 		
@@ -235,15 +250,20 @@ package sched
 			printf("[UA] APP %d begins running\n", appid);
 		}
 
-		on post from RUNNING to POSTING do {
+		on post from RUNNING to POSTING 
+		provided(posted_task_count < task_count)
+		do {
+			posted_task_count  = posted_task_count + 1;
 			printf("[UA] APP %d posting a task\n", appid);	
 		}
 		
-		on res from POSTING to RUNNING do {
+		on ret from POSTING to RUNNING do {
 			printf("[UA] APP %d continue to run\n", appid); 
 		}
 
-		on fin from RUNNING to FIN do {
+		on fin from RUNNING to FIN 
+		provided(posted_task_count == task_count)
+		do {
 			printf("[UA] APP %d is done\n", appid);
 		}	
 		
@@ -253,12 +273,21 @@ package sched
 	compound  type  Compound() 
 		// components
     		component TaskScheduler ts()
-		// component TaskHandler t1(1), t2(2)
-		component UserApplication app1(1), app2(2)
+		component EventScheduler es()		
+
+		component UserApplication app1(1, 2)
+		component TaskHandler th_app1_1(), th_app1_2()
 		
-		connector Conn2 post_task1(ts.post, app1.post)
-		connector Conn2 post_task2(ts.post, app2.post)
 		// connectors
+		// post task
+		connector Conn3_Post post_task1(app1.post, ts.post, th_app1_1.init)
+		connector Conn3_Post post_task2(app1.post, ts.post, th_app1_2.init)
+		// the link of tasksched and its handler: begin
+		connector Conn2 begin_task1(th_app1_1.beg, ts.beg) // limit of step is 10
+		connector Conn2 begin_task2(th_app1_2.beg, ts.beg)
+		// the link of tasksched and its handler: finish
+		connector Conn2 fin_task1(th_app1_1.fin, ts.fin)
+		connector Conn2 fin_task2(th_app1_2.fin, ts.fin)	
 	end
 
 end
