@@ -3,6 +3,8 @@ package sched
 	// Constants definition
 	const data int TASK_BUFFER_LIMIT = 255
 	const data int MAX_TASK_EXECUTION_STEP = 10
+	const data int ENABLE = 1
+	const data int DISABLE = 0		
 
 	// helper function definition
 	extern function printf(string)
@@ -14,22 +16,24 @@ package sched
 	// Port dinfinition
 	port type Port_t()
 	port type Port_ta (int appid)
+	port type Port_ts (int status)
 	port type Port_tta(int tid, int appid)
 
 	// connectors
-	// boradcast
 	connector type Conn2(Port_t p1, Port_t p2)
 		define p1 p2	
 	end
 	
+	// for posting task
 	connector type Conn3_Post(Port_ta app ,Port_t ts, Port_tta th_bound)	
 		define app ts th_bound
 		on app ts th_bound down {th_bound.tid = get_rand(); th_bound.appid = app.appid;printf("------%d\n", th_bound.tid);}
 	end
 
-	// rendezvous
-	connector type RConn3(Port_t sched ,Port_t p1, Port_t p2)
-		define sched p1 p2
+	// for task beginning	
+	connector type Conn3_Begin(Port_ts p1, Port_t p2, Port_t p3)
+		define p1 p2 p3
+		on p1 p2 p3 provided (p1.status == ENABLE)
 	end
 
 
@@ -90,7 +94,7 @@ package sched
 		// variable difination
 		data int e_count = 0
 		data int stack_size = 0
-		data int is_es_idle = 0
+		data int is_es_idle = DISABLE
 
 		// exported port defination
 		export port Port_t beg()
@@ -98,6 +102,8 @@ package sched
 		export port Port_t res()
 		export port Port_t fin()
 		export port Port_t sig()
+		export port Port_ts test(is_es_idle)
+		
 		// internal port difination
 	
 		// state defination
@@ -105,13 +111,20 @@ package sched
 
 		// behaviour defination
 		initial to IDLE do {
-			is_es_idle = 1;
+			is_es_idle = ENABLE;
 			e_count = 0;
 			stack_size = 0;
 			printf("[ES] initial to IDLE, ec: %d, ss: %d \n", e_count, stack_size);
 		}
 
+		// only when ES is IDLE, TS can start a new task
+		on test from IDLE to IDLE do {
+			is_es_idle = ENABLE;
+			printf("[ES] ES is still IDLE now, spinning\n");
+		}
+
 		on sig from IDLE to ACCEPT do {
+			is_es_idle = DISABLE;
 			printf("[ES] on sig from IDLE to ACCEPT, ec: %d, ss: %d\n", e_count, stack_size);
 		} 
 
@@ -153,6 +166,10 @@ package sched
 		do {
 			printf("[ES] on res from BUSY2 to IDLE, ec: %d, ss: %d\n", e_count, stack_size);
 		}
+
+		// priority definition, it means when 'sig' interaction comes, 'test' interaction must step back 
+		priority idle_state_change test < sig
+		
 	end	
 
 	// atom type of Task Handler
@@ -283,8 +300,8 @@ package sched
 		connector Conn3_Post post_task1(app1.post, ts.post, th_app1_1.init)
 		connector Conn3_Post post_task2(app1.post, ts.post, th_app1_2.init)
 		// the link of tasksched and its handler: begin
-		connector Conn2 begin_task1(th_app1_1.beg, ts.beg) // limit of step is 10
-		connector Conn2 begin_task2(th_app1_2.beg, ts.beg)
+		connector Conn3_Begin begin_task1(es.test, th_app1_1.beg, ts.beg)					
+		connector Conn3_Begin begin_task2(es.test, th_app1_2.beg, ts.beg)
 		// the link of tasksched and its handler: finish
 		connector Conn2 fin_task1(th_app1_1.fin, ts.fin)
 		connector Conn2 fin_task2(th_app1_2.fin, ts.fin)	
