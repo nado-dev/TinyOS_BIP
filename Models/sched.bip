@@ -1,4 +1,4 @@
-@cpp(src="ext-cpp/my_helper.cpp", include="my_helper.hpp")
+@cpp(src="ext-cpp/my_helper.cpp, ext-cpp/scheduler_basic_p_c.cpp", include="my_helper.hpp, scheduler_basic_p_c.hpp")
 package sched
 	// Constants definition
 	const data int TASK_BUFFER_LIMIT = 255
@@ -10,8 +10,13 @@ package sched
 	extern function printf(string)
 	extern function printf(string, int)
 	extern function printf(string, int, int)
+	// to get unique TID
 	extern function int get_rand()
 	extern function init_seed()
+	// task queue in ScheulerBasicP.nc
+	extern function scheuler_init()
+	extern function int push_task(int id)
+	extern function int pop_task()
 	
 	// Port dinfinition
 	port type Port_t()
