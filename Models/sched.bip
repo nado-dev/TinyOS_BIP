@@ -2,6 +2,7 @@
 package sched
 	// Constants definition
 	const data int TASK_BUFFER_LIMIT = 255
+	const data int NO_TASK = 255
 	const data int MAX_TASK_EXECUTION_STEP = 10
 	const data int ENABLE = 1
 	const data int DISABLE = 0		
@@ -10,7 +11,7 @@ package sched
 	extern function printf(string)
 	extern function printf(string, int)
 	extern function printf(string, int, int)
-	// to get unique TID
+	// to get unique tID
 	extern function int get_rand()
 	extern function init_seed()
 	// task queue in ScheulerBasicP.nc
@@ -24,24 +25,40 @@ package sched
 	port type Port_ts (int status)
 	port type Port_tta(int tid, int appid)
 
-	// connectors
+	// connectors 
+	// basic 2-ports connector: rendz
 	connector type Conn2(Port_t p1, Port_t p2)
 		define p1 p2	
 	end
+
+	// for task to finish
+	connector type Conn2_Finish(Port_tta p1, Port_t p2)
+		define p1 p2	
+		on p1 p2
+		provided(p1.tid != 0 && p1.appid != 0)
+	end
 	
 	// for posting task
-	connector type Conn3_Post(Port_ta app ,Port_t ts, Port_tta th_bound)	
+	connector type Conn3_Post(Port_ta app ,Port_tta ts, Port_tta th_bound)	
 		define app ts th_bound
-		on app ts th_bound 
-		provided(th_bound.tid == 0)
-		down {th_bound.tid = get_rand(); th_bound.appid = app.appid;printf("------%d\n", th_bound.tid);}
+		on app ts th_bound
+		provided (th_bound.tid == 0)
+		down {
+			th_bound.tid = get_rand(); 
+			th_bound.appid = app.appid;
+			ts.tid = th_bound.tid;
+			ts.appid = app.appid;
+			printf("------%d\n", th_bound.tid);		
+		}
 	end
 
 	// for task beginning	
 	connector type Conn3_Begin(Port_ts p1, Port_t p2, Port_t p3)
 		define p1 p2 p3
 		on p1 p2 p3
-		down {printf(">>>>>>Task begin\n");}
+		down {
+			printf(">>>>>>Conn3_Begin Task begin\n");
+		}
 	end
 
 
@@ -49,17 +66,23 @@ package sched
 	atom type TaskScheduler()
    		 // variable definition
     		data int task_count = 0
+		data int ptv = -1
+		data int appid = -1
+		data int tid = -1
+		data int temp = -1
 		
    		 // port instance define
    		export port Port_t beg()
   		export port Port_t fin()
-    		export port Port_t post()	
+    		export port Port_tta post(tid, appid)	
 		port Port_t tick() // spinning	
 
     		// place define
     		place FREE, BUSY
 
     		initial to FREE do {
+			// initial of task queue
+			scheuler_init(); 
 			task_count = 0;
         			printf("[TS] initial to FREE  %d\n", task_count);
     		}
@@ -74,19 +97,44 @@ package sched
     		on post from FREE to FREE 
 		provided (task_count < TASK_BUFFER_LIMIT)
 		do{
-			task_count = task_count + 1;
-			printf("[TS] on post from FREE to FREE tc:%d\n", task_count);
+			temp = push_task(tid);
+			// add to queue
+			if (tid != -1 && temp == ENABLE) 
+			then 
+				printf("------%d\n", tid);
+				task_count = task_count + 1;
+				printf("[TS] on post from FREE to FREE tc:%d\n", task_count);
+			else 
+				printf("[USER_DEFINE_ERROR] push failed: %d, errno: %d\n", tid, temp);
+			fi
+			temp = -1;
 		}
 
     		on post from BUSY to BUSY 
 		provided (task_count < TASK_BUFFER_LIMIT)
 		do{
-			task_count = task_count + 1;
-			printf("[TS] on post from BUSY to BUSY tc:%d\n", task_count);
+			temp = push_task(tid);
+			// add to queue
+			if (tid != -1 && temp == ENABLE) 
+			then 
+				task_count = task_count + 1;
+				printf("[TS] on post from BUSY to BUSY tc:%d\n", task_count);
+			else 
+				printf("[USER_DEFINE_ERROR] push failed: %d, errno: %d\n", tid, temp);
+			fi
+			temp = -1;
 		}
 
     		on fin from BUSY to FREE do {
+			ptv = pop_task();
+			if(ptv == NO_TASK) 
+			then 
+				printf("[USER_DEFINE_ERROR] pop failed, NO_TASK\n");
+			else 
+				printf("------ popped task tid %d\n", ptv);
+			fi
 			printf("[TS] on fin from BUSY to FREE do tc:%d\n", task_count);
+			ptv= -1;
 		}	
 
 		on tick from FREE to FREE
@@ -190,7 +238,7 @@ package sched
 		// port definition 
 		export port Port_tta init(tid, appid)
 		export port Port_t beg()
-		export port Port_t fin()
+		export port Port_tta fin(tid, appid)
 		export port Port_t pre()
 		export port Port_t res()
 		port Port_t exe()
@@ -311,8 +359,8 @@ package sched
 		connector Conn3_Begin begin_task1(es.test, th_app1_1.beg, ts.beg)					
 		connector Conn3_Begin begin_task2(es.test, th_app1_2.beg, ts.beg)
 		// the link of tasksched and its handler: finish
-		connector Conn2 fin_task1(th_app1_1.fin, ts.fin)
-		connector Conn2 fin_task2(th_app1_2.fin, ts.fin)	
+		connector Conn2_Finish fin_task1(th_app1_1.fin, ts.fin)
+		connector Conn2_Finish fin_task2(th_app1_2.fin, ts.fin)	
 	end
 
 end

@@ -5,7 +5,7 @@ int get_rand() {
 	// if((rand() % 100) == 0) {
 	// 	return rand() % 100;
 	// }
-	return rand() % 1000;
+	return rand() % 255; 
 }
 
 void init_seed() {

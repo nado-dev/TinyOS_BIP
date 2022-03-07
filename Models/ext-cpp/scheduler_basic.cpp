@@ -39,6 +39,7 @@ int pop_task()
 
 int is_waiting(int id)
 {
+    printf("[debug] m_next[id] = %d, m_tail = %d\n", m_next[id], m_tail);
     return (m_next[id] != NO_TASK) || (m_tail == id);
 }
 
@@ -72,15 +73,20 @@ void scheuler_init()
         {
             atomic
             {
-                memset( (void *)m_next, NO_TASK, sizeof(m_next) );
+                memset(m_next, NO_TASK, sizeof(m_next));
                 m_head = NO_TASK;
                 m_tail = NO_TASK;
             }
         }
     */
-    memset((void *)m_next, NO_TASK, sizeof(m_next));
+    memset((void *)m_next, -1, sizeof(m_next));
     m_head = NO_TASK;
     m_tail = NO_TASK;
+     for (int i = 0; i < NUM_TASKS; ++i)
+    {
+            m_next[i] = NO_TASK;
+    }
+    print_arr();
 }
 
 int scheduler_run_next_task()
@@ -123,4 +129,24 @@ int task_basic_postTask(int id)
 
 void task_basic_runTask(int id)
 {
+}
+
+void helper_print_state() {
+    printf("m_head = %d\n", m_head);
+    printf("m_tail = %d\n", m_head);
+    for (int i = 0; i < NUM_TASKS; ++i)
+    {
+        printf("current ARRAY\n");
+        if (m_next[i] != 0)
+        {
+            printf("m_next[%d]: %d\n", i, m_next[i]);
+        }
+    }
+}
+
+void print_arr() {
+ for (int i = 0; i < NUM_TASKS; ++i)
+    {
+            printf("m_next[%d]: %d\n", i, m_next[i]);
+    }	
 }

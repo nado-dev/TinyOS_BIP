@@ -2,7 +2,7 @@
 #define _SchedulerBasic
 
 #include <string.h>
-
+#include <stdio.h>
 /**
  * SchedulerBasicP implements the default TinyOS scheduler sequence, as
  * documented in TEP 106.
@@ -31,5 +31,8 @@ int task_basic_postTask(int id);
 
 void task_basic_runTask(int id);
 
+void helper_print_state();
+
+void print_arr();
 
 #endif
