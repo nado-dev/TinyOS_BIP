@@ -5,12 +5,15 @@ package sched
 	const data int NO_TASK = 255
 	const data int MAX_TASK_EXECUTION_STEP = 10
 	const data int ENABLE = 1
-	const data int DISABLE = 0		
+	const data int DISABLE = 0
+	const data int UNDEFINED = -1		
 
 	// helper function definition
 	extern function printf(string)
 	extern function printf(string, int)
 	extern function printf(string, int, int)
+	extern function printf(string, string, int)
+	extern function printf(string, string, int, int)
 	// to get unique tID
 	extern function int get_rand()
 	extern function init_seed()
@@ -23,6 +26,7 @@ package sched
 	port type Port_t()
 	port type Port_ta (int appid)
 	port type Port_ts (int status)
+	port type Port_tte (int ext, string tname)
 	port type Port_tta(int tid, int appid)
 
 	// connectors 
@@ -61,15 +65,23 @@ package sched
 		}
 	end
 
+	// test: for 2 TH only , act like a boradcast
+	connector type Conn3_Preem(Port_t p1, Port_t p2, Port_t p3)
+		define p1 p2 p3
+	end
+
+	connector type Conn3_Resume(Port_t p1, Port_t p2, Port_t p3)
+		define p1 p2 p3
+	end
 
 	// atom: Model of Task Schduler
 	atom type TaskScheduler()
    		 // variable definition
     		data int task_count = 0
-		data int ptv = -1
-		data int appid = -1
-		data int tid = -1
-		data int temp = -1
+		data int ptv = UNDEFINED
+		data int appid = UNDEFINED
+		data int tid = UNDEFINED
+		data int temp =UNDEFINED
 		
    		 // port instance define
    		export port Port_t beg()
@@ -99,7 +111,7 @@ package sched
 		do{
 			temp = push_task(tid);
 			// add to queue
-			if (tid != -1 && temp == ENABLE) 
+			if (tid != UNDEFINED && temp == ENABLE) 
 			then 
 				printf("------%d\n", tid);
 				task_count = task_count + 1;
@@ -107,7 +119,7 @@ package sched
 			else 
 				printf("[USER_DEFINE_ERROR] push failed: %d, errno: %d\n", tid, temp);
 			fi
-			temp = -1;
+			temp =UNDEFINED;
 		}
 
     		on post from BUSY to BUSY 
@@ -115,14 +127,14 @@ package sched
 		do{
 			temp = push_task(tid);
 			// add to queue
-			if (tid != -1 && temp == ENABLE) 
+			if (tid !=UNDEFINED && temp == ENABLE) 
 			then 
 				task_count = task_count + 1;
 				printf("[TS] on post from BUSY to BUSY tc:%d\n", task_count);
 			else 
 				printf("[USER_DEFINE_ERROR] push failed: %d, errno: %d\n", tid, temp);
 			fi
-			temp = -1;
+			temp =UNDEFINED;
 		}
 
     		on fin from BUSY to FREE do {
@@ -134,7 +146,7 @@ package sched
 				printf("------ popped task tid %d\n", ptv);
 			fi
 			printf("[TS] on fin from BUSY to FREE do tc:%d\n", task_count);
-			ptv= -1;
+			ptv = UNDEFINED;
 		}	
 
 		on tick from FREE to FREE
@@ -272,7 +284,7 @@ package sched
 		}
 
 		on pre from EXE to SUSP do {
-			printf("[TH] on pre from EXE to SUSP, tid:%d\n", tid);
+			printf("[TH] on pre from EXE to SUSP, th is premeeted, going to SUSPENd, tid:%d\n", tid);
 		}
 
 		on res from SUSP to EXE do {
@@ -298,6 +310,67 @@ package sched
 		//export port Port_t pre()
 		//export port Port_t res()
 	//end
+	
+	atom type Timer( int timer_id) 
+		data int expire_in = UNDEFINED
+		data int count_down = UNDEFINED
+		data string tname = ""
+		// port definition
+		export port Port_tte post(expire_in, tname)
+		export port Port_t sig()
+		port Port_t tick()
+		
+		// state definition
+		place EXE, DONE
+		
+		// interaction definition
+		initial to EXE do {
+			count_down = 0;
+			printf("[Timer] timer %d init\n", timer_id);
+		}
+	
+		on post from EXE to EXE 
+		provided (count_down == 0)
+		do {
+			count_down = expire_in;
+			printf("[Timer] on post from EXE to EXE, new event set %s, expire in %d, timer ID\n", tname, expire_in, timer_id);
+		}
+
+		on tick from EXE to EXE
+		provided (count_down >= 1)
+		do {
+			// todo: real time related?
+			count_down = count_down - 1;
+		}
+		
+		on sig from EXE to DONE
+		provided (count_down == 0)
+		do {
+			printf("[Timer] on sig from EXE to DONE,  event: %s, expire in %d\n", tname, expire_in, timer_id);
+		}
+	end
+
+	atom type Sensor(int sid, string sname)		
+		// port definition
+		port Port_t beg()
+		export port Port_t sig()
+
+		// state definition
+		place IDLE, EXE
+
+		initial to IDLE do {
+			printf("[Sensor] sensor %s begin, sid: %s\n", sname, sid);
+		}
+		
+		on beg from IDLE to EXE do{
+			printf("[Sensor] on beg from IDLE to EXE, sensor %s, sid: %s\n", sname, sid);
+		} 
+
+		on sig from EXE to EXE do {
+			printf("[Sensor] on sig from EXE to EXE, sensor %s, sid: %s\n", sname, sid);
+		}
+		
+	end
 
 	// user defined software component
 	atom type UserApplication(int _appid, int task_count)
@@ -346,7 +419,9 @@ package sched
 	compound  type  Compound() 
 		// components
     		component TaskScheduler ts()
-		component EventScheduler es()		
+		component EventScheduler es()
+
+		component Timer timer1(111)		
 
 		component UserApplication app1(1, 2)
 		component TaskHandler th_app1_1(), th_app1_2()
@@ -361,6 +436,10 @@ package sched
 		// the link of tasksched and its handler: finish
 		connector Conn2_Finish fin_task1(th_app1_1.fin, ts.fin)
 		connector Conn2_Finish fin_task2(th_app1_2.fin, ts.fin)	
+		
+		// the following is for test
+		connector Conn3_Preem test_pree(es.pre, th_app1_1.pre, th_app1_2.pre)
+		connector Conn3_Resume test_res(es.res, th_app1_1.res, th_app1_2.res)
 	end
 
 end
