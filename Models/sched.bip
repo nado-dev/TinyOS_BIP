@@ -1,4 +1,4 @@
-@cpp(src="ext-cpp/my_helper.cpp, ext-cpp/scheduler_basic_p_c.cpp", include="my_helper.hpp, scheduler_basic_p_c.hpp")
+@cpp(src="ext-cpp/my_helper.cpp,ext-cpp/scheduler_basic.cpp", include="my_helper.hpp,scheduler_basic.hpp")
 package sched
 	// Constants definition
 	const data int TASK_BUFFER_LIMIT = 255
@@ -32,13 +32,16 @@ package sched
 	// for posting task
 	connector type Conn3_Post(Port_ta app ,Port_t ts, Port_tta th_bound)	
 		define app ts th_bound
-		on app ts th_bound down {th_bound.tid = get_rand(); th_bound.appid = app.appid;printf("------%d\n", th_bound.tid);}
+		on app ts th_bound 
+		provided(th_bound.tid == 0)
+		down {th_bound.tid = get_rand(); th_bound.appid = app.appid;printf("------%d\n", th_bound.tid);}
 	end
 
 	// for task beginning	
 	connector type Conn3_Begin(Port_ts p1, Port_t p2, Port_t p3)
 		define p1 p2 p3
-		on p1 p2 p3 provided (p1.status == ENABLE)
+		on p1 p2 p3
+		down {printf(">>>>>>Task begin\n");}
 	end
 
 
@@ -173,7 +176,7 @@ package sched
 		}
 
 		// priority definition, it means when 'sig' interaction comes, 'test' interaction must step back 
-		priority idle_state_change test < sig
+		// priority idle_state_change test < sig
 		
 	end	
 

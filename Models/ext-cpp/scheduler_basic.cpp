@@ -1,4 +1,4 @@
-#include "scheduler_basic_p_c.hpp"
+#include "scheduler_basic.hpp"
 // Helper functions (internal functions) intentionally do not have atomic
 // sections.  It is left as the duty of the exported interface functions to
 // manage atomicity to minimize chances for binary code bloat.
@@ -7,6 +7,16 @@
 // if the head is at the end, mark the tail at the end, too
 // mark the task as not in the queue 
 // uint8_t
+
+enum ShedulerBasicPublic
+{
+    NUM_TASKS = 255,
+    NO_TASK = 255,
+};
+
+int m_head;
+int m_tail;
+int m_next[NUM_TASKS];
 
 int pop_task()
 {

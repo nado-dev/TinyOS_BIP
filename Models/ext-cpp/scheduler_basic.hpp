@@ -1,3 +1,6 @@
+#ifndef _SchedulerBasic
+#define _SchedulerBasic
+
 #include <string.h>
 
 /**
@@ -11,15 +14,6 @@
  * This is a C language of SchedulerBasicP.nc, translated by FangWenyu
  */
 
-enum ShedulerBasicPublic
-{
-    NUM_TASKS = 255,
-    NO_TASK = 255,
-};
-
-int m_head;
-int m_tail;
-int m_next[NUM_TASKS];
 
 int pop_task();
 
@@ -36,3 +30,6 @@ void scheduler_task_loop();
 int task_basic_postTask(int id);
 
 void task_basic_runTask(int id);
+
+
+#endif
