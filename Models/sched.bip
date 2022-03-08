@@ -2,6 +2,7 @@
 package sched
 	// Constants definition
 	const data int TASK_BUFFER_LIMIT = 255
+	const data int EVENT_STACK_SIZE = 255
 	const data int NO_TASK = 255
 	const data int MAX_TASK_EXECUTION_STEP = 10
 	const data int ENABLE = 1
@@ -21,13 +22,21 @@ package sched
 	extern function scheuler_init()
 	extern function int push_task(int id)
 	extern function int pop_task()
+	// event stack 
+	extern function push(int)
+	extern function int pop()
+	extern function bool is_empty()
+	extern function bool is_full()
+	extern function create_stack(int)
+	extern function destroy_stack()
 	
 	// Port dinfinition
 	port type Port_t()
+	port type Port_e (int eid)
 	port type Port_ta (int appid)
 	port type Port_ts (int status)
 	port type Port_tte (int ext, string tname)
-	port type Port_tta(int tid, int appid)
+	port type Port_tta (int tid, int appid)
 
 	// connectors 
 	// basic 2-ports connector: rendz
@@ -52,7 +61,7 @@ package sched
 			th_bound.appid = app.appid;
 			ts.tid = th_bound.tid;
 			ts.appid = app.appid;
-			printf("------%d\n", th_bound.tid);		
+			printf(">>>>>>%d\n", th_bound.tid);		
 		}
 	end
 
@@ -66,12 +75,27 @@ package sched
 	end
 
 	// test: for 2 TH only , act like a boradcast
-	connector type Conn3_Preem(Port_t p1, Port_t p2, Port_t p3)
+	connector type Conn3_Preem(Port_t p1, Port_tta p2, Port_tta p3)
 		define p1 p2 p3
+		on p1 p2 p3
+		down {
+			// stack the tids which are preempted
+			push(p2.tid);
+			push(p3.tid);
+			printf(">>>>>> preempted tasks is stacked\n");
+		}
 	end
 
 	connector type Conn3_Resume(Port_t p1, Port_t p2, Port_t p3)
 		define p1 p2 p3
+	end
+
+	connector type Conn2_Signal(Port_t es, Port_t hw) 
+		define es hw
+		on es hw
+		down {
+			// generate eid
+		}
 	end
 
 	// atom: Model of Task Schduler
@@ -179,6 +203,7 @@ package sched
 
 		// behaviour defination
 		initial to IDLE do {
+			create_stack(EVENT_STACK_SIZE);
 			is_es_idle = ENABLE;
 			e_count = 0;
 			stack_size = 0;
@@ -251,7 +276,7 @@ package sched
 		export port Port_tta init(tid, appid)
 		export port Port_t beg()
 		export port Port_tta fin(tid, appid)
-		export port Port_t pre()
+		export port Port_tta pre(tid, appid)
 		export port Port_t res()
 		port Port_t exe()
 
@@ -276,7 +301,7 @@ package sched
 		provided(exe_step < MAX_TASK_EXECUTION_STEP)
 		do {
 			exe_step = exe_step + 1;
-			printf("[TH] Task is executing, tid:%d\n", tid);
+			printf("[TH] Task is executing, tid:%d, step: %d\n", tid, exe_step);
 		}
 
 		on fin from EXE to IDLE do {
@@ -333,7 +358,7 @@ package sched
 		provided (count_down == 0)
 		do {
 			count_down = expire_in;
-			printf("[Timer] on post from EXE to EXE, new event set %s, expire in %d, timer ID\n", tname, expire_in, timer_id);
+			printf("[Timer] on post from EXE to EXE, new event set:%s, expire in:%d, timer ID: %d\n", tname, expire_in, timer_id);
 		}
 
 		on tick from EXE to EXE
@@ -346,7 +371,7 @@ package sched
 		on sig from EXE to DONE
 		provided (count_down == 0)
 		do {
-			printf("[Timer] on sig from EXE to DONE,  event: %s, expire in %d\n", tname, expire_in, timer_id);
+			printf("[Timer] on sig from EXE to DONE,  event: %s, expire in %d\n, timer ID: %d", tname, expire_in, timer_id);
 		}
 	end
 
@@ -354,11 +379,13 @@ package sched
 		// port definition
 		port Port_t beg()
 		export port Port_t sig()
+		data int sig_limit = UNDEFINED
 
 		// state definition
 		place IDLE, EXE
 
 		initial to IDLE do {
+			sig_limit = 1;
 			printf("[Sensor] sensor %s begin, sid: %s\n", sname, sid);
 		}
 		
@@ -366,7 +393,10 @@ package sched
 			printf("[Sensor] on beg from IDLE to EXE, sensor %s, sid: %s\n", sname, sid);
 		} 
 
-		on sig from EXE to EXE do {
+		on sig from EXE to EXE 
+		provided(sig_limit > 0)
+		do {	
+			sig_limit = sig_limit - 1;	
 			printf("[Sensor] on sig from EXE to EXE, sensor %s, sid: %s\n", sname, sid);
 		}
 		
@@ -421,7 +451,8 @@ package sched
     		component TaskScheduler ts()
 		component EventScheduler es()
 
-		component Timer timer1(111)		
+		// component Timer timer1(111)
+		component Sensor sen1(111, "temperature")		
 
 		component UserApplication app1(1, 2)
 		component TaskHandler th_app1_1(), th_app1_2()
@@ -437,9 +468,12 @@ package sched
 		connector Conn2_Finish fin_task1(th_app1_1.fin, ts.fin)
 		connector Conn2_Finish fin_task2(th_app1_2.fin, ts.fin)	
 		
-		// the following is for test
+		// the following is for test: meet the basic demanding
 		connector Conn3_Preem test_pree(es.pre, th_app1_1.pre, th_app1_2.pre)
 		connector Conn3_Resume test_res(es.res, th_app1_1.res, th_app1_2.res)
+
+		// Sensor sig, it will sig anytime
+		connector Conn2_Signal signal_1(es.sig, sen1.sig)
 	end
 
 end
