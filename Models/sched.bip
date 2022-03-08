@@ -14,7 +14,7 @@ package sched
 	extern function printf(string, int)
 	extern function printf(string, int, int)
 	extern function printf(string, string, int)
-	extern function printf(string, string, int, int)
+	extern function printf(string, int, int, int)
 	// to get unique tID
 	extern function int get_rand()
 	extern function init_seed()
@@ -35,7 +35,7 @@ package sched
 	port type Port_e (int eid)
 	port type Port_ta (int appid)
 	port type Port_ts (int status)
-	port type Port_tte (int ext, string tname)
+	port type Port_tte (int ext, int t)
 	port type Port_tta (int tid, int appid)
 
 	// connectors 
@@ -203,7 +203,7 @@ package sched
 
 		// behaviour defination
 		initial to IDLE do {
-			create_stack(EVENT_STACK_SIZE);
+			create_stack(255);
 			is_es_idle = ENABLE;
 			e_count = 0;
 			stack_size = 0;
@@ -339,9 +339,9 @@ package sched
 	atom type Timer( int timer_id) 
 		data int expire_in = UNDEFINED
 		data int count_down = UNDEFINED
-		data string tname = ""
+		data int t = UNDEFINED
 		// port definition
-		export port Port_tte post(expire_in, tname)
+		export port Port_tte post(expire_in, t)
 		export port Port_t sig()
 		port Port_t tick()
 		
@@ -358,7 +358,7 @@ package sched
 		provided (count_down == 0)
 		do {
 			count_down = expire_in;
-			printf("[Timer] on post from EXE to EXE, new event set:%s, expire in:%d, timer ID: %d\n", tname, expire_in, timer_id);
+			printf("[Timer] on post from EXE to EXE, new event set:%d, expire in:%d, timer ID: %d\n", t, expire_in, timer_id);
 		}
 
 		on tick from EXE to EXE
@@ -371,11 +371,11 @@ package sched
 		on sig from EXE to DONE
 		provided (count_down == 0)
 		do {
-			printf("[Timer] on sig from EXE to DONE,  event: %s, expire in %d\n, timer ID: %d", tname, expire_in, timer_id);
+			printf("[Timer] on sig from EXE to DONE,  event: %d, expire in %d\n, timer ID: %d", t, expire_in, timer_id);
 		}
 	end
 
-	atom type Sensor(int sid, string sname)		
+	atom type Sensor(int sid)		
 		// port definition
 		port Port_t beg()
 		export port Port_t sig()
@@ -386,18 +386,18 @@ package sched
 
 		initial to IDLE do {
 			sig_limit = 1;
-			printf("[Sensor] sensor %s begin, sid: %s\n", sname, sid);
+			printf("[Sensor] sensor sid: %d\n", sid);
 		}
 		
 		on beg from IDLE to EXE do{
-			printf("[Sensor] on beg from IDLE to EXE, sensor %s, sid: %s\n", sname, sid);
+			printf("[Sensor] on beg from IDLE to EXE, sid: %d\n", sid);
 		} 
 
 		on sig from EXE to EXE 
 		provided(sig_limit > 0)
 		do {	
 			sig_limit = sig_limit - 1;	
-			printf("[Sensor] on sig from EXE to EXE, sensor %s, sid: %s\n", sname, sid);
+			printf("[Sensor] on sig from EXE to EXE, sid: %d\n", sid);
 		}
 		
 	end
@@ -452,7 +452,7 @@ package sched
 		component EventScheduler es()
 
 		// component Timer timer1(111)
-		component Sensor sen1(111, "temperature")		
+		component Sensor sen1(456)		
 
 		component UserApplication app1(1, 2)
 		component TaskHandler th_app1_1(), th_app1_2()
