@@ -2,12 +2,15 @@
 package sched
 	// Constants definition
 	const data int TASK_BUFFER_LIMIT = 255
-	const data int EVENT_STACK_SIZE = 255
 	const data int NO_TASK = 255
 	const data int MAX_TASK_EXECUTION_STEP = 10
 	const data int ENABLE = 1
 	const data int DISABLE = 0
-	const data int UNDEFINED = -1		
+	const data int UNDEFINED = -1
+	// Handler TYPE TaskHandler(TH):0, EventHandler(EH):1, CommandHandler(CH):2
+	const data int TYPE_TH = 0
+	const data int TYPE_EH = 1
+	const data int TYPE_CH = 2		
 
 	// helper function definition
 	extern function printf(string)
@@ -25,10 +28,12 @@ package sched
 	// event stack 
 	extern function push(int)
 	extern function int pop()
-	extern function bool is_empty()
+	extern function bool stack_is_empty()
 	extern function bool is_full()
 	extern function create_stack(int)
 	extern function destroy_stack()
+	// trace helper
+	extern function print_s(string)
 	
 	// Port dinfinition
 	port type Port_t()
@@ -50,9 +55,29 @@ package sched
 		on p1 p2
 		provided(p1.tid != 0 && p1.appid != 0)
 	end
+
+	// for event beginning
+	connector type Conn2_Begin(Port_t p1, Port_t p2)
+		define p1 p2
+	end
+
+	// test: for 2-TH only , act like a boradcast
+	connector type Conn2_Preem(Port_t p1, Port_tta p2)
+		define p1 p2
+		on p1 p2
+		down {
+			// stack the tids which are preempted
+			push(p2.tid);
+			printf(">>>>>> preempted tasks is stacked, they are %d\n", p2.tid);
+		}
+	end
 	
-	// for posting task
-	connector type Conn3_Post(Port_ta app ,Port_tta ts, Port_tta th_bound)	
+	connector type Conn2_Resume(Port_t p1, Port_t p2)
+		define p1 p2
+	end
+
+	// post and signal
+	connector type Conn3_PS(Port_ta app ,Port_tta ts, Port_tta th_bound)	
 		define app ts th_bound
 		on app ts th_bound
 		provided (th_bound.tid == 0)
@@ -74,30 +99,6 @@ package sched
 		}
 	end
 
-	// test: for 2 TH only , act like a boradcast
-	connector type Conn3_Preem(Port_t p1, Port_tta p2, Port_tta p3)
-		define p1 p2 p3
-		on p1 p2 p3
-		down {
-			// stack the tids which are preempted
-			push(p2.tid);
-			push(p3.tid);
-			printf(">>>>>> preempted tasks is stacked\n");
-		}
-	end
-
-	connector type Conn3_Resume(Port_t p1, Port_t p2, Port_t p3)
-		define p1 p2 p3
-	end
-
-	connector type Conn2_Signal(Port_t es, Port_t hw) 
-		define es hw
-		on es hw
-		down {
-			// generate eid
-		}
-	end
-
 	// atom: Model of Task Schduler
 	atom type TaskScheduler()
    		 // variable definition
@@ -106,6 +107,7 @@ package sched
 		data int appid = UNDEFINED
 		data int tid = UNDEFINED
 		data int temp =UNDEFINED
+		data int flag_is_running = DISABLE
 		
    		 // port instance define
    		export port Port_t beg()
@@ -124,8 +126,9 @@ package sched
     		}
 
    		on beg from FREE to BUSY
-		provided (task_count != 0)	
- 		do {
+		provided (task_count != 0 && flag_is_running == DISABLE)	
+ 		do {	
+			flag_is_running = ENABLE;
 			task_count = task_count - 1;
 			printf("[TS] on beg from FREE to BUSY tc:%d\n", task_count);
 		}
@@ -143,7 +146,7 @@ package sched
 			else 
 				printf("[USER_DEFINE_ERROR] push failed: %d, errno: %d\n", tid, temp);
 			fi
-			temp =UNDEFINED;
+			temp = UNDEFINED;
 		}
 
     		on post from BUSY to BUSY 
@@ -151,17 +154,18 @@ package sched
 		do{
 			temp = push_task(tid);
 			// add to queue
-			if (tid !=UNDEFINED && temp == ENABLE) 
+			if (tid != UNDEFINED && temp == ENABLE) 
 			then 
 				task_count = task_count + 1;
 				printf("[TS] on post from BUSY to BUSY tc:%d\n", task_count);
 			else 
 				printf("[USER_DEFINE_ERROR] push failed: %d, errno: %d\n", tid, temp);
 			fi
-			temp =UNDEFINED;
+			temp = UNDEFINED;
 		}
 
     		on fin from BUSY to FREE do {
+			flag_is_running = DISABLE;
 			ptv = pop_task();
 			if(ptv == NO_TASK) 
 			then 
@@ -171,6 +175,7 @@ package sched
 			fi
 			printf("[TS] on fin from BUSY to FREE do tc:%d\n", task_count);
 			ptv = UNDEFINED;
+			tid = UNDEFINED;
 		}	
 
 		on tick from FREE to FREE
@@ -187,13 +192,16 @@ package sched
 		data int e_count = 0
 		data int stack_size = 0
 		data int is_es_idle = DISABLE
+		data int id = 0
+		data int _from = 0
 
 		// exported port defination
 		export port Port_t beg()
 		export port Port_t pre()
-		export port Port_t res()
 		export port Port_t fin()
-		export port Port_t sig()
+		export port Port_tta sig(id, _from)
+		export port Port_t res1()  // which e_count == 0
+		export port Port_t res2() // which e_count != 0
 		export port Port_ts test(is_es_idle)
 		
 		// internal port difination
@@ -241,21 +249,20 @@ package sched
 		on fin from BUSY1 to BUSY2
 		provided(stack_size != 0)
 		do {
+			pop(); 	// pop from stack
 			stack_size = stack_size - 1;
 			e_count = e_count - 1;
-			printf("[ES] on fin from BUSY1 to BUSY2\n");
-			printf("ec: %d\n", e_count);
-			printf("ss: %d\n", stack_size);
+			printf("[ES] on fin from BUSY1 to BUSY2, ec: %d, ss: %d\n", e_count, stack_size);
 		}
 
-		on res from BUSY2 to BUSY1
+		on res2 from BUSY2 to BUSY1
 		provided(e_count > 0)
 		do {
 			printf("[ES] on res from BUSY2 to BUSY1, ec: %d, ss: %d\n", e_count, stack_size);
 		}
 
-		on res from BUSY2 to IDLE
-		provided(e_count ==0)
+		on res1 from BUSY2 to IDLE
+		provided(e_count == 0)
 		do {
 			printf("[ES] on res from BUSY2 to IDLE, ec: %d, ss: %d\n", e_count, stack_size);
 		}
@@ -265,12 +272,13 @@ package sched
 		
 	end	
 
-	// atom type of Task Handler
-	atom type TaskHandler()
+	// atom type of Task and Event Handler
+	atom type Handler(int tp)
 		
 		data int exe_step = 0
 		data int tid = 0
 		data int appid = 0
+		data string TAG = ""		
 
 		// port definition 
 		export port Port_tta init(tid, appid)
@@ -285,15 +293,16 @@ package sched
 
 		// behavior definition
 		initial to IDLE do {
-			printf("[TH] initial to IDLE\n");
+			if(tp == 0) then TAG = "[TH]"; else TAG = "[EH]"; fi
+			print_s(TAG); printf("initial to IDLE\n");
 		}
 
 		on init from IDLE to BOUND do {
-			printf("[TH] on init from IDLE to BOUND do , appid: %d, tid: %d\n", appid, tid);
+			print_s(TAG); printf("on init from IDLE to BOUND do , appid: %d, id: %d\n", appid, tid);
 		}
 		
 		on beg from BOUND to EXE do{
-			printf("[TH] on begin from IDLE to EXE, tid:%d\n", tid);
+			print_s(TAG); printf("on begin from IDLE to EXE, id:%d\n", tid);
 		} 
 
 		// this is internal
@@ -301,40 +310,22 @@ package sched
 		provided(exe_step < MAX_TASK_EXECUTION_STEP)
 		do {
 			exe_step = exe_step + 1;
-			printf("[TH] Task is executing, tid:%d, step: %d\n", tid, exe_step);
+			print_s(TAG); printf("executing, id:%d, step: %d\n", tid, exe_step);
 		}
 
 		on fin from EXE to IDLE do {
-			printf("[TH] on fin from EXE to IDLE, tid:%d\n", tid);
+			print_s(TAG); printf(" on fin from EXE to IDLE, id:%d\n", tid);
 		}
 
 		on pre from EXE to SUSP do {
-			printf("[TH] on pre from EXE to SUSP, th is premeeted, going to SUSPENd, tid:%d\n", tid);
+			print_s(TAG); printf(" on pre from EXE to SUSP, th is premeeted, going to SUSPEND, id:%d\n", tid);
 		}
 
 		on res from SUSP to EXE do {
-			printf("on res from SUSP to EXE, tid:%d\n", tid);
+			print_s(TAG); printf(" on res from SUSP to EXE, id:%d\n", tid);
 		}
 			
 	end
-
-	// atom type of Event Handler
-	// atom type EventHandler()
-
-		// port definition
-		//export port Port_t pre()
-		//export port Port_t res()
-		//export port Port_t fin()
-		//export port Port_t beg()
-	// end
-
-	// atom type of Command Handler
-	// atom type CommandHandler()
-		
-		// port definition
-		//export port Port_t pre()
-		//export port Port_t res()
-	//end
 	
 	atom type Timer( int timer_id) 
 		data int expire_in = UNDEFINED
@@ -375,16 +366,20 @@ package sched
 		}
 	end
 
-	atom type Sensor(int sid)		
+	atom type Sensor(int _sid)		
+		// data definition
+		data int sid = UNDEFINED
+		data int sig_limit = UNDEFINED
+
 		// port definition
 		port Port_t beg()
-		export port Port_t sig()
-		data int sig_limit = UNDEFINED
+		export port Port_ta sig(sid)
 
 		// state definition
 		place IDLE, EXE
 
 		initial to IDLE do {
+			sid = _sid;
 			sig_limit = 1;
 			printf("[Sensor] sensor sid: %d\n", sid);
 		}
@@ -453,14 +448,15 @@ package sched
 
 		// component Timer timer1(111)
 		component Sensor sen1(456)		
-
 		component UserApplication app1(1, 2)
-		component TaskHandler th_app1_1(), th_app1_2()
-		
+
+		component Handler th_app1_1(TYPE_TH), th_app1_2(TYPE_TH)
+		component Handler eh_sen1_1(TYPE_EH)
+
 		// connectors
 		// post task
-		connector Conn3_Post post_task1(app1.post, ts.post, th_app1_1.init)
-		connector Conn3_Post post_task2(app1.post, ts.post, th_app1_2.init)
+		connector Conn3_PS post_task1(app1.post, ts.post, th_app1_1.init)
+		connector Conn3_PS post_task2(app1.post, ts.post, th_app1_2.init)
 		// the link of tasksched and its handler: begin
 		connector Conn3_Begin begin_task1(es.test, th_app1_1.beg, ts.beg)					
 		connector Conn3_Begin begin_task2(es.test, th_app1_2.beg, ts.beg)
@@ -469,11 +465,15 @@ package sched
 		connector Conn2_Finish fin_task2(th_app1_2.fin, ts.fin)	
 		
 		// the following is for test: meet the basic demanding
-		connector Conn3_Preem test_pree(es.pre, th_app1_1.pre, th_app1_2.pre)
-		connector Conn3_Resume test_res(es.res, th_app1_1.res, th_app1_2.res)
+		connector Conn2_Preem test_pree1(es.pre, th_app1_1.pre)
+		connector Conn2_Preem test_pree2(es.pre, th_app1_2.pre)
+
+		connector Conn2_Resume test_res1(es.res1, th_app1_1.res)
+		connector Conn2_Resume test_res2(es.res1, th_app1_2.res)
 
 		// Sensor sig, it will sig anytime
-		connector Conn2_Signal signal_1(es.sig, sen1.sig)
+		connector Conn3_PS sig_event1(sen1.sig, es.sig, eh_sen1_1.init)
+		connector Conn2_Begin begin_event1(eh_sen1_1.beg, es.beg)
+		connector Conn2_Finish fin_event1(eh_sen1_1.fin, es.fin)
 	end
-
 end

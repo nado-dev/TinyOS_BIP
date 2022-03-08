@@ -19,7 +19,7 @@ void init_seed() {
 stack helper
 */
 
-bool is_empty(void)
+bool stack_is_empty(void)
 {
     return top_element == -1;
 }
@@ -56,14 +56,23 @@ void push(int value)
 
 int pop(void)
 {
-    assert(!is_empty());
+    assert(!stack_is_empty());
     return stack[top_element--];
 }
 
 int top(void)
 {
-    assert(!is_empty());
+    assert(!stack_is_empty());
     return stack[top_element];
+}
+
+/**
+other
+*/
+
+void print_s(string cmp_name)
+{
+  cout << cmp_name << endl;
 }
 
 

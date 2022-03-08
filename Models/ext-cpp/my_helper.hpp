@@ -4,6 +4,11 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <malloc.h>
+#include <iostream>
+#include <stdlib.h>
+#include <string>
+
+using namespace std;
 
 /**
 random num gen
@@ -22,11 +27,17 @@ int pop(void);
 
 int top(void);
 
-bool is_empty(void);
+bool stack_is_empty(void);
 
 bool is_full(void);
 
 void create_stack(int size);
 
 void destroy_stack(void);
+
+/**
+other
+*/
+void print_s(string cmp_name);
+
 

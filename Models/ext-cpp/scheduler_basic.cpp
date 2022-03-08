@@ -86,7 +86,6 @@ void scheuler_init()
     {
             m_next[i] = NO_TASK;
     }
-    print_arr();
 }
 
 int scheduler_run_next_task()
