@@ -7,8 +7,8 @@ static int top_element = -1;
 /**
 random num gen
 */
-int get_rand() {
-	return rand() % 255; 
+int get_rand(int range) {
+	return rand() % range; 
 }
 
 void init_seed() {
@@ -66,13 +66,20 @@ int top(void)
     return stack[top_element];
 }
 
+int get_size() {
+    if (stack_is_empty()) {
+        return 0;
+    }
+    return top_element + 1;
+}
+
 /**
 other
 */
 
 void print_s(string cmp_name)
 {
-  cout << cmp_name << endl;
+  cout << cmp_name;
 }
 
 

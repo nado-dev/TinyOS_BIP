@@ -19,7 +19,7 @@ package sched
 	extern function printf(string, string, int)
 	extern function printf(string, int, int, int)
 	// to get unique tID
-	extern function int get_rand()
+	extern function int get_rand(int)
 	extern function init_seed()
 	// task queue in ScheulerBasicP.nc
 	extern function scheuler_init()
@@ -30,6 +30,7 @@ package sched
 	extern function int pop()
 	extern function bool stack_is_empty()
 	extern function bool is_full()
+	extern function int get_size()
 	extern function create_stack(int)
 	extern function destroy_stack()
 	// trace helper
@@ -37,6 +38,7 @@ package sched
 	
 	// Port dinfinition
 	port type Port_t()
+	port type Port_tv(int v)
 	port type Port_e (int eid)
 	port type Port_ta (int appid)
 	port type Port_ts (int status)
@@ -63,12 +65,15 @@ package sched
 
 	// test: for 2-TH only , act like a boradcast
 	connector type Conn2_Preem(Port_t p1, Port_tta p2)
-		define p1 p2
-		on p1 p2
-		down {
+		define p1' p2
+		on p1 down {
+			// no task is running ,just do the event
+			printf(">>>>>> [Conn2_Preem] no task now, on p1 down\n");
+		}
+		on p1 p2 down {
 			// stack the tids which are preempted
 			push(p2.tid);
-			printf(">>>>>> preempted tasks is stacked, they are %d\n", p2.tid);
+			printf(">>>>>>  [Conn2_Preem] preempted tasks is stacked, they are %d\n", p2.tid);
 		}
 	end
 	
@@ -82,11 +87,11 @@ package sched
 		on app ts th_bound
 		provided (th_bound.tid == 0)
 		down {
-			th_bound.tid = get_rand(); 
+			th_bound.tid = get_rand(255); 
 			th_bound.appid = app.appid;
 			ts.tid = th_bound.tid;
 			ts.appid = app.appid;
-			printf(">>>>>>%d\n", th_bound.tid);		
+			printf(">>>>>>[Conn3_PS] tid:%d\n", th_bound.tid);		
 		}
 	end
 
@@ -95,7 +100,7 @@ package sched
 		define p1 p2 p3
 		on p1 p2 p3
 		down {
-			printf(">>>>>>Conn3_Begin Task begin\n");
+			printf(">>>>>> [Conn3_Begin] Conn3_Begin Task begin\n");
 		}
 	end
 
@@ -230,7 +235,7 @@ package sched
 		} 
 
 		on pre from ACCEPT to PREEMPT do {
-			stack_size = stack_size + 1;
+			stack_size = get_size();
 			printf("[ES] on pre from ACCEPT to PREEMPT, ec: %d, ss: %d\n", e_count, stack_size);
 		}
 
@@ -250,7 +255,7 @@ package sched
 		provided(stack_size != 0)
 		do {
 			pop(); 	// pop from stack
-			stack_size = stack_size - 1;
+			stack_size = get_size();
 			e_count = e_count - 1;
 			printf("[ES] on fin from BUSY1 to BUSY2, ec: %d, ss: %d\n", e_count, stack_size);
 		}
@@ -293,7 +298,15 @@ package sched
 
 		// behavior definition
 		initial to IDLE do {
-			if(tp == 0) then TAG = "[TH]"; else TAG = "[EH]"; fi
+			if(tp == 0) then 
+				TAG = "[TH]"; 
+			else 
+				if(tp == 1) then
+					TAG = "[EH]"; 
+				else
+					TAG = "[CH]";
+				fi
+			fi
 			print_s(TAG); printf("initial to IDLE\n");
 		}
 
@@ -440,6 +453,25 @@ package sched
 		
 	end
 
+	// for Sensor, it will provide a random value as the return value of senors
+	atom type Environment() 
+		// data definition
+		data int value
+		// port definition
+		export port Port_tv read(value)
+		// state definition
+		place DO
+		// interaction definition
+		initial to DO do {
+			value = get_rand(100000);
+		}
+			
+		on read from DO to DO do {
+			value = get_rand(100000);
+		}
+	
+	end
+
 	// main
 	compound  type  Compound() 
 		// components
@@ -451,7 +483,8 @@ package sched
 		component UserApplication app1(1, 2)
 
 		component Handler th_app1_1(TYPE_TH), th_app1_2(TYPE_TH)
-		component Handler eh_sen1_1(TYPE_EH)
+		component Handler eh_sen1_data_ready(TYPE_EH)
+		component Handler ch_sen1_get_data(TYPE_CH) // callback
 
 		// connectors
 		// post task
@@ -472,8 +505,8 @@ package sched
 		connector Conn2_Resume test_res2(es.res1, th_app1_2.res)
 
 		// Sensor sig, it will sig anytime
-		connector Conn3_PS sig_event1(sen1.sig, es.sig, eh_sen1_1.init)
-		connector Conn2_Begin begin_event1(eh_sen1_1.beg, es.beg)
-		connector Conn2_Finish fin_event1(eh_sen1_1.fin, es.fin)
+		connector Conn3_PS sig_event1(sen1.sig, es.sig, eh_sen1_data_ready.init)
+		connector Conn2_Begin begin_event1(eh_sen1_data_ready.beg, es.beg)
+		connector Conn2_Finish fin_event1(eh_sen1_data_ready.fin, es.fin)
 	end
 end
