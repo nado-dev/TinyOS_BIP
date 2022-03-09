@@ -7,7 +7,7 @@ package sched
 	const data int ENABLE = 1
 	const data int DISABLE = 0
 	const data int UNDEFINED = -1
-	// Handler TYPE TaskHandler(TH):0, EventHandler(EH):1, CommandHandler(CH):2
+	// Handler TYPE TaskHandler(TH):0, EventHandler(EH):1
 	const data int TYPE_TH = 0
 	const data int TYPE_EH = 1
 	const data int TYPE_CH = 2		
@@ -39,10 +39,7 @@ package sched
 	// Port dinfinition
 	port type Port_t()
 	port type Port_tv(int v)
-	port type Port_e (int eid)
-	port type Port_ta (int appid)
-	port type Port_ts (int status)
-	port type Port_tte (int ext, int t)
+	port type Port_tvv(int v1, int v2)
 	port type Port_tta (int tid, int appid)
 
 	// connectors 
@@ -82,21 +79,21 @@ package sched
 	end
 
 	// post and signal
-	connector type Conn3_PS(Port_ta app ,Port_tta ts, Port_tta th_bound)	
+	connector type Conn3_PS(Port_tv app ,Port_tta ts, Port_tta th_bound)	
 		define app ts th_bound
 		on app ts th_bound
 		provided (th_bound.tid == 0)
 		down {
 			th_bound.tid = get_rand(255); 
-			th_bound.appid = app.appid;
+			th_bound.appid = app.v;
 			ts.tid = th_bound.tid;
-			ts.appid = app.appid;
+			ts.appid = app.v;
 			printf(">>>>>>[Conn3_PS] tid:%d\n", th_bound.tid);		
 		}
 	end
 
 	// for task beginning	
-	connector type Conn3_Begin(Port_ts p1, Port_t p2, Port_t p3)
+	connector type Conn3_Begin(Port_tv p1, Port_t p2, Port_t p3)
 		define p1 p2 p3
 		on p1 p2 p3
 		down {
@@ -207,7 +204,7 @@ package sched
 		export port Port_tta sig(id, _from)
 		export port Port_t res1()  // which e_count == 0
 		export port Port_t res2() // which e_count != 0
-		export port Port_ts test(is_es_idle)
+		export port Port_tv test(is_es_idle)
 		
 		// internal port difination
 	
@@ -294,18 +291,14 @@ package sched
 		port Port_t exe()
 
 		// state definition
-		place IDLE, BOUND, EXE, SUSP
+		place IDLE, BOUND, EXE, SUSP, DONE
 
 		// behavior definition
 		initial to IDLE do {
 			if(tp == 0) then 
 				TAG = "[TH]"; 
 			else 
-				if(tp == 1) then
-					TAG = "[EH]"; 
-				else
-					TAG = "[CH]";
-				fi
+				TAG = "[EH]"; 
 			fi
 			print_s(TAG); printf("initial to IDLE\n");
 		}
@@ -326,8 +319,11 @@ package sched
 			print_s(TAG); printf("executing, id:%d, step: %d\n", tid, exe_step);
 		}
 
-		on fin from EXE to IDLE do {
-			print_s(TAG); printf(" on fin from EXE to IDLE, id:%d\n", tid);
+		on fin from EXE to DONE 
+		provided(exe_step == MAX_TASK_EXECUTION_STEP)
+		do {
+	{
+			print_s(TAG); printf(" on fin from EXE to DONE, id:%d\n", tid);
 		}
 
 		on pre from EXE to SUSP do {
@@ -340,12 +336,55 @@ package sched
 			
 	end
 	
+	// Command Handler is quite differnet from TH and EH, it will return a value indicates it succees or not
+	// no scheduler
+	atom CommandHandler(int _cid, int _appid)
+		// data definition
+		data int cid = UNDEFINED
+		data int appid = UNDEFINED
+		data int read_state = UNDEFINED
+			
+		// port definition 
+		export port Port_t beg()
+		export port Port_tta fin(cid, appid, read_state)
+		export port Port_tta pre(cid, appid)
+		export port Port_t res()
+		
+		// state definition
+		place IDLE, EXE, SUSP, DONE
+
+		// behavior definition
+		initial to IDLE do {
+			cid = _cid;
+			appid = _appid;
+			read_state = DISABLE;
+			printf("[CH] initial to IDLE\n");
+		}
+		
+		on beg from IDLE to EXE do{
+			printf("[CH] on begin from IDLE to EXE, cid:%d\n", cid);
+		} 
+
+		on fin from EXE to DONE 
+		do {
+			printf("[CH] on fin from EXE to DONE, cid:%d\n, >>>[read_state]: %d", cid, read_state);
+		}
+
+		on pre from EXE to SUSP do {
+			printf("[CH] on pre from EXE to SUSP, th is premeeted, going to SUSPEND, cid:%d\n", cid);
+		}
+
+		on res from SUSP to EXE do {
+			printf(" on res from SUSP to EXE, cid:%d\n", cid);
+		}
+	end
+	
 	atom type Timer( int timer_id) 
 		data int expire_in = UNDEFINED
 		data int count_down = UNDEFINED
 		data int t = UNDEFINED
 		// port definition
-		export port Port_tte post(expire_in, t)
+		export port Port_tta post(expire_in, t)
 		export port Port_t sig()
 		port Port_t tick()
 		
@@ -382,29 +421,35 @@ package sched
 	atom type Sensor(int _sid)		
 		// data definition
 		data int sid = UNDEFINED
-		data int sig_limit = UNDEFINED
+		data int read_state = UNDEFINED
+		data int read_value = UNDEFINED
 
 		// port definition
-		port Port_t beg()
-		export port Port_ta sig(sid)
+		export port Port_tvv beg(read_state, read_value)
+		export port Port_tv sig(sid)
 
 		// state definition
-		place IDLE, EXE
+		place IDLE, EXE1, EXE2
 
 		initial to IDLE do {
 			sid = _sid;
-			sig_limit = 1;
+			read_state = DISABLE;
+			read_value = DISABLE;
 			printf("[Sensor] sensor sid: %d\n", sid);
 		}
 		
-		on beg from IDLE to EXE do{
+		on beg from IDLE to EXE1 do{
 			printf("[Sensor] on beg from IDLE to EXE, sid: %d\n", sid);
 		} 
 
-		on sig from EXE to EXE 
-		provided(sig_limit > 0)
+		on read from EXE1 to EXE2 
+		provided (read_state == ENABLE)
+		do{
+			
+		}
+
+		on sig from EXE2 to IDLE 
 		do {	
-			sig_limit = sig_limit - 1;	
 			printf("[Sensor] on sig from EXE to EXE, sid: %d\n", sid);
 		}
 		
@@ -417,7 +462,7 @@ package sched
 		data int appid
 		
 		// port definition
-		export port Port_ta post(appid)
+		export port Port_tv post(appid)
 		port Port_t start()
 		port Port_t ret()
 		port Port_t fin()
@@ -457,17 +502,24 @@ package sched
 	atom type Environment() 
 		// data definition
 		data int value
+		data int state
 		// port definition
-		export port Port_tv read(value)
+		export port Port_tvv read(state, value)
 		// state definition
 		place DO
 		// interaction definition
 		initial to DO do {
-			value = get_rand(100000);
+			state = DISABLE;
 		}
 			
 		on read from DO to DO do {
-			value = get_rand(100000);
+			value = get_rand(10000);
+			// 10% fail
+			if (value > 9000) then
+				state = DISABLE;
+			else
+				state = ENABLE;
+			fi
 		}
 	
 	end
@@ -484,7 +536,8 @@ package sched
 
 		component Handler th_app1_1(TYPE_TH), th_app1_2(TYPE_TH)
 		component Handler eh_sen1_data_ready(TYPE_EH)
-		component Handler ch_sen1_get_data(TYPE_CH) // callback
+
+		component CommandHandler ch_sen1_get_data(7777, 7777) // callback
 
 		// connectors
 		// post task
@@ -505,8 +558,8 @@ package sched
 		connector Conn2_Resume test_res2(es.res1, th_app1_2.res)
 
 		// Sensor sig, it will sig anytime
-		connector Conn3_PS sig_event1(sen1.sig, es.sig, eh_sen1_data_ready.init)
 		connector Conn2_Begin begin_event1(eh_sen1_data_ready.beg, es.beg)
+		connector Conn3_PS sig_event1(sen1.sig, es.sig, eh_sen1_data_ready.init)
 		connector Conn2_Finish fin_event1(eh_sen1_data_ready.fin, es.fin)
 	end
 end
