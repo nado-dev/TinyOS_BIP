@@ -52,21 +52,15 @@ package sched
 	connector type Conn3(Port_tv p1, Port_t p2, Port_t p3)
 		define p1 p2 p3
 	end
-
-	connector type Conn2_Sen_Read(Port_tvv p1, Port_tvv p2)
-		define p1 p2	// sen env
-		on p1 p2
-		provided (p2.v1 != UNDEFINED && p2.v2 != UNDEFINED)
-		down {
-			p1.v1 = p2.v1;
-			p1.v2 = p2.v2;
-		}
-	end
 	
-	connector type Conn2_Sen_Begin (Port_t p1, Port_tv p2, Port_t p3)
-		define p1 p2 p3
-		on p1 p2 p3
-		provided(p2.v == ENABLE)
+	connector type Conn4_Sen_Begin (Port_t a_s, Port_t c_b, Port_tvv s_r, Port_tvv e_r)
+		define a_s c_b s_r e_r
+		on a_s c_b s_r e_r
+		provided (e_r.v1 != UNDEFINED && e_r.v2 != UNDEFINED)
+		down {
+			s_r.v1 = e_r.v1;
+			s_r.v2 = e_r.v2;
+		}
 	end
 
 	connector type Conn2_Sen_Repo(Port_tv p1, Port_tv p2)
@@ -691,6 +685,7 @@ package sched
 		// the link of tasksched and its handler: begin
 		connector Conn3 begin_task1(es.test, th_app1_1.beg, ts.beg)					
 		connector Conn3 begin_task2(es.test, th_app1_2.beg, ts.beg)
+	
 		// the link of tasksched and its handler: finish
 		connector Conn2_Finish fin_task1(th_app1_1.fin, ts.fin)
 		connector Conn2_Finish fin_task2(th_app1_2.fin, ts.fin)	
@@ -703,11 +698,8 @@ package sched
 		connector Conn2 test_res3(es.res1, ch_sen1_get_data.res)
 
 		// Command handler :TempRead.read() == SUCCESS
-		connector Conn2_Sen_Begin sen_ch_beg(ch_sen1_get_data.beg, sen1.test, app1.sig)	
+		connector Conn4_Sen_Begin sen_ch_beg(app1.sig, ch_sen1_get_data.beg, sen1.read, env.read)	
 		connector Conn2_Sen_Repo sen_repo(ch_sen1_get_data.fin, sen1.test)
-		
-		// gather information from sensor
-		connector Conn2_Sen_Read sen_read(sen1.read, env.read)
 		
 		// Sensor sig, it will sig anytime
 		connector Conn4_S      sig_event1(sen1.sig, es.sig, eh_sen1_data_ready.init, ch_sen1_get_data.done)
