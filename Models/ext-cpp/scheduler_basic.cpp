@@ -41,7 +41,6 @@ int pop_task()
 
 int is_waiting(int id)
 {
-    printf("[debug] m_next[id] = %d, m_tail = %d\n", m_next[id], m_tail);
     return (m_next[id] != NO_TASK) || (m_tail == id);
 }
 

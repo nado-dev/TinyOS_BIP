@@ -97,19 +97,61 @@ package sched
 	end
 
 	// test: for 2-TH only , act like a boradcast
-	connector type Conn2_Preem(Port_t p1, Port_tta p2)
-		define p1' p2
-		on p1 down {
+	connector type Conn2_Preem(Port_t es, Port_tta p1)
+		define es' p1
+		on es down {
 			// no task is running ,just do the event
 			printf(">>>>>> [Conn2_Preem] no task now, on p1 down\n");
 		}
-		on p1 p2 down {
+		on es p1 down {
 			// stack the tids which are preempted
 			push(p2.tid);
 			printf(">>>>>>  [Conn2_Preem] preempted tasks is stacked, they are %d\n", p2.tid);
 		}
 	end
 
+	// test: for 4-TH/CH only , act like a boradcast
+	connector type Conn4_Preem(Port_t es, Port_tta p1, Port_tta p2, Port_tta p3)
+		define es' p1 p2 p3
+		on es p1 p2 p3 down { 
+			// stack the tids which are preempted
+			push(p1.tid);
+			push(p2.tid);
+			push(p3.tid);
+			printf(">>>>>>  [Conn2_Preem] preempted tasks is stacked, they are %d ,%d and %d\n",p1.tid, p2.tid, p3.tid);
+		}
+		on es p1 p2      down {
+			push(p1.tid)
+			push(p2.tid);
+			printf(">>>>>>  [Conn2_Preem] preempted tasks is stacked, they are %d and%d\n",p1.tid, p2.tid);
+		}
+		on es p1      p3 down {
+			push(p1.tid)
+			push(p3.tid);
+			printf(">>>>>>  [Conn2_Preem] preempted tasks is stacked, they are %dand %d\n", p1.tid, p3.tid);
+		}
+		on es     p2  p3 down {
+			push(p2.tid);
+			push(p3.tid);
+			printf(">>>>>>  [Conn2_Preem] preempted tasks is stacked, they are %d and %d\n", p2.tid, p3.tid);
+		}
+		on es  p1          down {
+			push(p1.tid);
+			printf(">>>>>>  [Conn2_Preem] preempted tasks is stacked, they are %d\n", p1.tid);
+		}
+		on es     p2       down {
+			push(p2.tid);
+			printf(">>>>>>  [Conn2_Preem] preempted tasks is stacked, they are %d\n", p2.tid);
+		}
+		on es           p3 down {
+			push(p3.tid);
+			printf(">>>>>>  [Conn2_Preem] preempted tasks is stacked, they are %d\n", p3.tid);
+		}
+		on es                down {
+			// no task is running ,just do the event
+			printf(">>>>>> [Conn4_Preem] no task now, on es down\n");
+		}
+	end
 	// post
 	connector type Conn3_P(Port_tv app ,Port_tta ts, Port_tta th_bound)	
 		define app ts th_bound
@@ -125,9 +167,9 @@ package sched
 	end
 
 	// signal
-	connector type Conn3_S(Port_tv3 sen ,Port_tv es, Port_tv3 eh)	
-		define sen es eh
-		on sen es eh
+	connector type Conn4_S(Port_tv3 sen ,Port_tv es, Port_tv3 eh, Port_t ch_done)
+		define sen es eh ch_done
+		on sen es eh ch_done
 		provided (eh.v1 == 0)
 		down {
 			eh.v1 = get_rand(255); 
@@ -432,6 +474,7 @@ package sched
 		export port Port_tv fin(read_state)
 		export port Port_tta pre(cid, appid)
 		export port Port_t res()
+		export port Port_t done()
 		
 		// state definition
 		place IDLE, EXE, SUSP, DONE
@@ -460,6 +503,8 @@ package sched
 		on res from SUSP to EXE do {
 			printf("[CH] on res from SUSP to EXE, cid:%d\n", cid);
 		}
+		
+		on done from DONE to DONE
 	end
 	
 	atom type Timer( int timer_id) 
@@ -584,7 +629,7 @@ package sched
 		}
 
 		on fin from RUNNING to FIN 
-		provided(posted_task_count == task_count)
+		provided(posted_task_count == task_count && signaled_count == signal_count)
 		do {
 			printf("[UA] APP %d is done\n", appid);
 		}	
@@ -650,9 +695,7 @@ package sched
 		connector Conn2_Finish fin_task2(th_app1_2.fin, ts.fin)	
 		
 		// the following is for test: meet the basic demanding
-		connector Conn2_Preem test_pree1(es.pre, th_app1_1.pre)
-		connector Conn2_Preem test_pree2(es.pre, th_app1_2.pre)
-		connector Conn2_Preem test_pree3(es.pre, ch_sen1_get_data.pre)
+		connector Conn2_Preem test_pree1(es.pre, th_app1_1.pre, th_app1_2.pre, ch_sen1_get_data.pre)
 		
 		connector Conn2 test_res1(es.res1, th_app1_1.res)
 		connector Conn2 test_res2(es.res1, th_app1_2.res)
@@ -666,7 +709,7 @@ package sched
 		connector Conn2_Sen_Read sen_read(sen1.read, env.read)
 		
 		// Sensor sig, it will sig anytime
-		connector Conn3_S      sig_event1(sen1.sig, es.sig, eh_sen1_data_ready.init)
+		connector Conn4_S      sig_event1(sen1.sig, es.sig, eh_sen1_data_ready.init, ch_sen1_get_data.done)
 		connector Conn2_Begin begin_event1(eh_sen1_data_ready.beg, es.beg)
 		connector Conn2_Finish_1 fin_event1(eh_sen1_data_ready.fin, es.fin)
 	end
