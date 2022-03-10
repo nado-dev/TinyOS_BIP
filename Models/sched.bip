@@ -10,7 +10,7 @@ package sched
 	// Handler TYPE TaskHandler(TH):0, EventHandler(EH):1
 	const data int TYPE_TH = 0
 	const data int TYPE_EH = 1
-	const data int TYPE_CH = 2		
+	const data int TYPE_CH = 2
 
 	// helper function definition
 	extern function printf(string)
@@ -38,6 +38,7 @@ package sched
 	// Port dinfinition
 	port type Port_t()
 	port type Port_tv(int v)
+	port type Port_tr (string msg)
 	port type Port_tvv(int v1, int v2)
 	port type Port_tv3(int v1, int v2, int v3)
 	port type Port_tv4(int v1, int v2, int v3, int v4)
@@ -259,6 +260,9 @@ package sched
 		do {
 			printf("[TS] TS is free now, spinnig\n");
 		}
+
+			// priority definition
+		// priority ts_tick_minimal tick < *
 	end
 
 
@@ -488,7 +492,7 @@ package sched
 
 		on fin from EXE to DONE 
 		do {
-			printf("[CH] on fin from EXE to DONE, cid:%d\n, >>>[read_state]: %d", cid, read_state);
+			printf("[CH] on fin from EXE to DONE, cid:%d, >>>[read_state]: %d\n", cid, read_state);
 		}
 
 		on pre from EXE to SUSP do {
@@ -565,12 +569,12 @@ package sched
 		}
 
 		on read from EXE1 to EXE2 do{
-			is_idle = DISABLE;
+			is_idle = ENABLE;
 			printf("[Sensor] on beg from EXE1 to EXE2, sid: %d\n", sid);
 		}
 
 		on sig from EXE2 to EXE1 do {	
-			is_idle = ENABLE;
+			is_idle = DISABLE;
 			printf("[Sensor] on sig from EXE2 to EXE1, sid: %d\n", sid);
 		}
 
@@ -628,6 +632,45 @@ package sched
 		do {
 			printf("[UA] APP %d is done\n", appid);
 		}	
+		
+	end
+
+	atom type RadioSender(int id)
+		// data definition
+		data string packet 
+		// port definition
+		export port Port_t sig()
+		export port Port_t broadcast()
+		export port Port_tr syn_send(packet)
+		// place definition
+		place IDLE, SEND, FIN
+
+		// interaction definition
+		initial to IDLE
+		
+		on syn_send from IDLE to SEND
+
+		on broadcast from SEND to FIN
+
+		on sig from FIN to IDLE
+
+	end
+	
+	atom type RadioReceiver(int id)
+		// data dedinition
+		data string packet
+		// port definition
+		export port Port_tr listen(packet)
+		export port Port_t  sig()
+		// place definition
+		place IDLE, RECV
+		
+		// interaction definition
+		initial to IDLE
+
+		on listen from IDLE to RECV
+
+		on sig from RECV to IDLE
 		
 	end
 
@@ -705,5 +748,6 @@ package sched
 		connector Conn4_S      sig_event1(sen1.sig, es.sig, eh_sen1_data_ready.init, ch_sen1_get_data.done)
 		connector Conn2_Begin begin_event1(eh_sen1_data_ready.beg, es.beg)
 		connector Conn2_Finish_1 fin_event1(eh_sen1_data_ready.fin, es.fin)
+
 	end
 end
