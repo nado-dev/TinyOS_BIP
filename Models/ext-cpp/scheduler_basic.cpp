@@ -17,6 +17,7 @@ enum ShedulerBasicPublic
 int m_head;
 int m_tail;
 int m_next[NUM_TASKS];
+int m_task_count;
 
 int pop_task()
 {
@@ -29,6 +30,7 @@ int pop_task()
             m_tail = NO_TASK;
         }
         m_next[id] = NO_TASK;
+        --m_task_count;
         return id;
     }
     else
@@ -58,6 +60,7 @@ int push_task(int id)
             m_next[m_tail] = id;
             m_tail = id;
         }
+        ++m_task_count;
         return 1;
     }
     else
@@ -86,6 +89,7 @@ void scheuler_init()
     {
             m_next[i] = NO_TASK;
     }
+    m_task_count = 0;
 }
 
 int scheduler_run_next_task()
@@ -148,4 +152,8 @@ void print_arr() {
     {
             printf("m_next[%d]: %d\n", i, m_next[i]);
     }	
+}
+
+int get_task_count() {
+    return m_task_count;
 }

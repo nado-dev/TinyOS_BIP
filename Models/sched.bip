@@ -25,6 +25,7 @@ package sched
 	extern function scheuler_init()
 	extern function int push_task(int id)
 	extern function int pop_task()
+	extern function int get_task_count()
 	// event stack 
 	extern function push(int)
 	extern function int pop()
@@ -33,8 +34,6 @@ package sched
 	extern function int get_size()
 	extern function create_stack(int)
 	extern function destroy_stack()
-	// trace helper
-	extern function print_s(string)
 	
 	// Port dinfinition
 	port type Port_t()
@@ -64,13 +63,10 @@ package sched
 		}
 	end
 	
-	connector type Conn2_Sen_Begin (Port_t p1, Port_tv p2)
-		define p1 p2
-		on p1 p2
+	connector type Conn2_Sen_Begin (Port_t p1, Port_tv p2, Port_t p3)
+		define p1 p2 p3
+		on p1 p2 p3
 		provided(p2.v == ENABLE)
-		down {
-			printf(" ");
-		}
 	end
 
 	connector type Conn2_Sen_Repo(Port_tv p1, Port_tv p2)
@@ -164,15 +160,15 @@ package sched
     		initial to FREE do {
 			// initial of task queue
 			scheuler_init(); 
-			task_count = 0;
-        			printf("[TS] initial to FREE  %d\n", task_count);
+        			printf("[TS] initial to FREE\n");
     		}
 
    		on beg from FREE to BUSY
 		provided (task_count != 0 && flag_is_running == DISABLE)	
  		do {	
 			flag_is_running = ENABLE;
-			task_count = task_count - 1;
+			pop_task();
+			task_count = get_task_count();
 			printf("[TS] on beg from FREE to BUSY tc:%d\n", task_count);
 		}
 
@@ -183,9 +179,8 @@ package sched
 			// add to queue
 			if (tid != UNDEFINED && temp == ENABLE) 
 			then 
-				printf("------%d\n", tid);
-				task_count = task_count + 1;
-				printf("[TS] on post from FREE to FREE tc:%d\n", task_count);
+				task_count = get_task_count();
+				printf("[TS] on post from FREE to FREE, new tid:------%d, tc:%d\n", tid, task_count);
 			else 
 				printf("[USER_DEFINE_ERROR] push failed: %d, errno: %d\n", tid, temp);
 			fi
@@ -199,7 +194,7 @@ package sched
 			// add to queue
 			if (tid != UNDEFINED && temp == ENABLE) 
 			then 
-				task_count = task_count + 1;
+				task_count = get_task_count();
 				printf("[TS] on post from BUSY to BUSY tc:%d\n", task_count);
 			else 
 				printf("[USER_DEFINE_ERROR] push failed: %d, errno: %d\n", tid, temp);
@@ -214,6 +209,7 @@ package sched
 			then 
 				printf("[USER_DEFINE_ERROR] pop failed, NO_TASK\n");
 			else 
+				task_count = get_task_count();
 				printf("------ popped task tid %d\n", ptv);
 			fi
 			printf("[TS] on fin from BUSY to FREE do tc:%d\n", task_count);
@@ -235,7 +231,6 @@ package sched
 		data int e_count = 0
 		data int stack_size = 0
 		data int is_es_idle = DISABLE
-		data int _from = 0
 		data int eid = 0
 
 		// exported port defination
@@ -246,8 +241,6 @@ package sched
 		export port Port_t res1()  // which e_count == 0
 		export port Port_t res2() // which e_count != 0
 		export port Port_tv test(is_es_idle)
-		
-		// internal port difination
 	
 		// state defination
 		place IDLE, ACCEPT, PREEMPT, BUSY1, BUSY2
@@ -370,7 +363,7 @@ package sched
 	end
 
 	atom type EventHandler()
-		
+		// data definition
 		data int exe_step = 0
 		data int eid = 0	
 		data int state= 0
@@ -547,13 +540,15 @@ package sched
 	end
 
 	// user defined software component
-	atom type UserApplication(int _appid, int task_count)
+	atom type UserApplication(int _appid, int task_count, int signal_count)
 		
 		data int posted_task_count = 0
-		data int appid
+		data int signaled_count = 0
+		data int appid = 0
 		
 		// port definition
 		export port Port_tv post(appid)
+		export port Port_t sig()
 		port Port_t start()
 		port Port_t ret()
 		port Port_t fin()
@@ -576,6 +571,13 @@ package sched
 			posted_task_count  = posted_task_count + 1;
 			printf("[UA] APP %d posting a task\n", appid);	
 		}
+
+		on sig from RUNNING to RUNNING 
+		provided (signaled_count < signal_count) 
+		do {
+			signaled_count = signaled_count + 1;
+			printf("[UA] APP %d signal a event\n", appid);
+		}
 		
 		on ret from POSTING to RUNNING do {
 			printf("[UA] APP %d continue to run\n", appid); 
@@ -589,7 +591,7 @@ package sched
 		
 	end
 
-	// for Sensor, it will provide a random value as the return value of senors
+	// for Sensor, it will provide a random value as the return of sensors
 	atom type Environment() 
 		// data definition
 		data int value
@@ -628,7 +630,7 @@ package sched
 
 		// component Timer timer1(111)
 		component Sensor sen1(456)		
-		component UserApplication app1(1, 2)
+		component UserApplication app1(1, 2, 1)
 
 		component TaskHandler th_app1_1(), th_app1_2()
 		component EventHandler eh_sen1_data_ready()
@@ -657,7 +659,7 @@ package sched
 		connector Conn2 test_res3(es.res1, ch_sen1_get_data.res)
 
 		// Command handler :TempRead.read() == SUCCESS
-		connector Conn2_Sen_Begin sen_ch_beg(ch_sen1_get_data.beg, sen1.test)	
+		connector Conn2_Sen_Begin sen_ch_beg(ch_sen1_get_data.beg, sen1.test, app1.sig)	
 		connector Conn2_Sen_Repo sen_repo(ch_sen1_get_data.fin, sen1.test)
 		
 		// gather information from sensor

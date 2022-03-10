@@ -35,4 +35,6 @@ void helper_print_state();
 
 void print_arr();
 
+int get_task_count();
+
 #endif
