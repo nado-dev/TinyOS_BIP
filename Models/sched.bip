@@ -515,15 +515,15 @@ package sched
 		port Port_t tick()
 		
 		// state definition
-		place EXE, DONE
+		place INIT, EXE
 		
 		// interaction definition
-		initial to EXE do {
+		initial to INIT do {
 			count_down = 0;
 			printf("[Timer] timer %d init\n", timer_id);
 		}
 	
-		on post from EXE to EXE 
+		on post from INIT to EXE 
 		provided (count_down == 0)
 		do {
 			count_down = expire_in;
@@ -535,12 +535,13 @@ package sched
 		do {
 			// todo: real time related?
 			count_down = count_down - 1;
+			printf("[Timer] on tick from EXE to EXE, remain countdown %d/%d", count_down, expire_in);
 		}
 		
-		on sig from EXE to DONE
+		on sig from EXE to INIT
 		provided (count_down == 0)
 		do {
-			printf("[Timer] on sig from EXE to DONE,  event: %d, expire in %d\n, timer ID: %d", t, expire_in, timer_id);
+			printf("[Timer] on sig from EXE to INIT,  event: %d, expire in %d\n, timer ID: %d", t, expire_in, timer_id);
 		}
 	end
 
