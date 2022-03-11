@@ -106,43 +106,30 @@ package sched
 	end
 
 	// test: for 4-TH/CH only , act like a boradcast
-	connector type Conn4_Preem(Port_t es, Port_tta p1, Port_tta p2, Port_tta p3)
-		define es' p1 p2 p3
-		on es p1 p2 p3 down { 
-			// stack the tids which are preempted
+	connector type Conn6_Preem(Port_t es, Port_tta p1, Port_tta p2, Port_tta p3, Port_tta p4, Port_tta p5)
+		define es' p1 p2 p3 p4 p5
+		
+		on es  p1                  down {
 			push(p1.tid);
+			printf(">>>>>>  [Conn4_Preem] preempted tasks is stacked, they are %d\n", p1.tid);
+		}
+		on es     p2               down {
 			push(p2.tid);
+			printf(">>>>>>  [Conn4_Preem] preempted tasks is stacked, they are %d\n", p2.tid);
+		}
+		on es           p3         down {
 			push(p3.tid);
-			printf(">>>>>>  [Conn2_Preem] preempted tasks is stacked, they are %d ,%d and %d\n",p1.tid, p2.tid, p3.tid);
+			printf(">>>>>>  [Conn4_Preem] preempted tasks is stacked, they are %d\n", p3.tid);
 		}
-		on es p1 p2      down {
-			push(p1.tid);
-			push(p2.tid);
-			printf(">>>>>>  [Conn2_Preem] preempted tasks is stacked, they are %d and%d\n",p1.tid, p2.tid);
+		on es               p4     down {
+			push(p4.tid);
+			printf(">>>>>>  [Conn4_Preem] preempted tasks is stacked, they are %d\n", p4.tid);
 		}
-		on es p1      p3 down {
-			push(p1.tid);
-			push(p3.tid);
-			printf(">>>>>>  [Conn2_Preem] preempted tasks is stacked, they are %dand %d\n", p1.tid, p3.tid);
+		on es                   p5 down {
+			push(p5.tid);
+			printf(">>>>>>  [Conn4_Preem] preempted tasks is stacked, they are %d\n", p5.tid);
 		}
-		on es     p2  p3 down {
-			push(p2.tid);
-			push(p3.tid);
-			printf(">>>>>>  [Conn2_Preem] preempted tasks is stacked, they are %d and %d\n", p2.tid, p3.tid);
-		}
-		on es  p1          down {
-			push(p1.tid);
-			printf(">>>>>>  [Conn2_Preem] preempted tasks is stacked, they are %d\n", p1.tid);
-		}
-		on es     p2       down {
-			push(p2.tid);
-			printf(">>>>>>  [Conn2_Preem] preempted tasks is stacked, they are %d\n", p2.tid);
-		}
-		on es           p3 down {
-			push(p3.tid);
-			printf(">>>>>>  [Conn2_Preem] preempted tasks is stacked, they are %d\n", p3.tid);
-		}
-		on es                down {
+		on es                        down {
 			// no task is running ,just do the event
 			printf(">>>>>> [Conn4_Preem] no task now, on es down\n");
 		}
@@ -159,6 +146,18 @@ package sched
 			ts.tid = th_bound.tid;
 			ts.appid = app.v;
 			printf(">>>>>>[Conn3_PS] tid:%d\n", th_bound.tid);		
+		}
+	end
+
+	connector type Conn3_Timer_Sig(Port_t timer, Port_tv es, Port_tv3 eh)
+		define timer es eh
+		on timer es eh
+		provided (eh.v1 == 0)
+		down {
+			eh.v1 = get_rand(255); 
+			eh.v2 = -2;
+			eh.v3 = -2;
+			es.v = eh.v1;	
 		}
 	end
 
@@ -409,12 +408,13 @@ package sched
 		data int eid = 0	
 		data int state= 0
 		data int value = 0
+		data int appid = -1
 
 		// port definition 
 		export port Port_tv3 init(eid, state, value)
 		export port Port_t beg()
 		export port Port_tv fin(eid)
-		export port Port_tv pre(eid)
+		export port Port_tta pre(eid, appid)
 		export port Port_t res()
 		port Port_t exe()
 
@@ -429,7 +429,7 @@ package sched
 
 		on init from IDLE to BOUND do {
 			printf("[EH] on init from IDLE to BOUND do ,id: %d\n", eid);
-			printf("state: %d, value: %d\n", state, value);
+			printf("[EH] read from Sensor: state: %d, value: %d\n", state, value);
 		}
 		
 		on beg from BOUND to EXE do{
@@ -506,12 +506,11 @@ package sched
 		on done from DONE to DONE
 	end
 	
-	atom type Timer( int timer_id) 
-		data int expire_in = UNDEFINED
+	atom type Timer( int timer_id, int expire_in) 
 		data int count_down = UNDEFINED
-		data int t = UNDEFINED
+		data int t = 0
 		// port definition
-		export port Port_tta post(expire_in, t)
+		export port Port_t post()
 		export port Port_t sig()
 		port Port_t tick()
 		
@@ -712,11 +711,12 @@ package sched
 		component EventScheduler es()
 
 		// component Timer timer1(111)
-		component Sensor sen1(456)		
-		component UserApplication app1(1, 2, 1)
+		component Sensor sen1(456)	
+		component Timer timer1(6324, 3)	
+		component UserApplication app1(1, 2, 2)
 
 		component TaskHandler th_app1_1(), th_app1_2()
-		component EventHandler eh_sen1_data_ready()
+		component EventHandler eh_sen1_data_ready(), eh_timer()
 		component CommandHandler ch_sen1_get_data(7777, 7777)
 
 		component Environment env() 
@@ -734,20 +734,32 @@ package sched
 		connector Conn2_Finish fin_task2(th_app1_2.fin, ts.fin)	
 		
 		// the following is for test: meet the basic demanding
-		connector Conn4_Preem test_pree1(es.pre, th_app1_1.pre, th_app1_2.pre, ch_sen1_get_data.pre)
+		connector Conn6_Preem test_pree1(es.pre, 
+							th_app1_1.pre, 
+							th_app1_2.pre, 
+							ch_sen1_get_data.pre, 
+							eh_sen1_data_ready.pre, 
+							eh_timer.pre)
 		
 		connector Conn2 test_res1(es.res1, th_app1_1.res)
 		connector Conn2 test_res2(es.res1, th_app1_2.res)
 		connector Conn2 test_res3(es.res1, ch_sen1_get_data.res)
+		connector Conn2 test_res4(es.res1, eh_sen1_data_ready.res)
+		connector Conn2 test_res5(es.res1, eh_timer.res)
 
 		// Command handler :TempRead.read() == SUCCESS
 		connector Conn4_Sen_Begin sen_ch_beg(app1.sig, ch_sen1_get_data.beg, sen1.read, env.read)	
-		connector Conn2_Sen_Repo sen_repo(ch_sen1_get_data.fin, sen1.test)
+		connector Conn2_Sen_Repo  sen_repo(ch_sen1_get_data.fin, sen1.test)
 		
 		// Sensor sig, it will sig anytime
-		connector Conn4_S      sig_event1(sen1.sig, es.sig, eh_sen1_data_ready.init, ch_sen1_get_data.done)
-		connector Conn2_Begin begin_event1(eh_sen1_data_ready.beg, es.beg)
-		connector Conn2_Finish_1 fin_event1(eh_sen1_data_ready.fin, es.fin)
+		connector Conn4_S            sig_event1(sen1.sig, es.sig, eh_sen1_data_ready.init, ch_sen1_get_data.done)
+		connector Conn2_Begin     begin_event1(eh_sen1_data_ready.beg, es.beg)
+		connector Conn2_Finish_1  fin_event1(eh_sen1_data_ready.fin, es.fin)
 
+		// Timer sig, it will sig when expired
+		connector Conn2                  set_timer1(app1.sig, timer1.post)
+		connector Conn3_Timer_Sig  sig_timer1(timer1.sig, es.sig, eh_timer.init)
+		connector Conn2_Begin        beg_timer1(eh_timer.beg, es.beg)
+		connector Conn2_Finish_1     fin_timer1(eh_timer.fin, es.fin)
 	end
 end
