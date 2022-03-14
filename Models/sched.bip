@@ -107,6 +107,11 @@ package sched
 		}
 	end
 
+	connector type Conn_Boot(Port_t tb, Port_t p1)
+		define tb' p1
+		on tb p1 down {printf("[Conn_Boot] p1 booted\n");}
+	end
+
 	// test: for 4-TH/CH only , act like a boradcast
 	connector type Conn6_Preem(Port_t es, Port_tta p1, Port_tta p2, Port_tta p3, Port_tta p4, Port_tta p5)
 		define es' p1 p2 p3 p4 p5
@@ -188,19 +193,21 @@ package sched
 		data int flag_is_es_free = UNDEFINED
 		
    		 // port instance define
+		export port Port_t init()
    		export port Port_t beg()
   		export port Port_t fin()
     		export port Port_tta post(tid, appid)	
 		export port Port_tv tick(flag_is_es_free) // spinning	
 
     		// place define
-    		place FREE, BUSY
+    		place BOOT, FREE, BUSY
 
-    		initial to FREE do {
+		initial to BOOT
+		
+		on init from BOOT to FREE do {
 			// initial of task queue
 			scheuler_init(); 
-        			printf("[TS] initial to FREE\n");
-    		}
+		}
 
    		on beg from FREE to BUSY
 		provided (task_count != 0 && flag_is_running == DISABLE)	
@@ -276,6 +283,7 @@ package sched
 		data int eid = 0
 
 		// exported port defination
+		export port Port_t init()
 		export port Port_t beg()
 		export port Port_t pre()
 		export port Port_t fin()
@@ -284,10 +292,12 @@ package sched
 		export port Port_tv test(is_es_idle)
 	
 		// state defination
-		place IDLE, ACCEPT, PREEMPT, BUSY1, BUSY2
-
+		place INIT, IDLE, ACCEPT, PREEMPT, BUSY1, BUSY2
+		
 		// behaviour defination
-		initial to IDLE do {
+		initial to INIT
+
+		on init from INIT to IDLE do {
 			create_stack(255);
 			is_es_idle = ENABLE;
 			e_count = 0;
@@ -420,7 +430,7 @@ package sched
 		port Port_t exe()
 
 		// state definition
-		place IDLE, BOUND, EXE, SUSP, DONE
+		place IDLE, BOUND, EXE, SUSP
 
 		// behavior definition
 		initial to IDLE do {
@@ -445,10 +455,11 @@ package sched
 			printf("[EH] executing, id:%d, step: %d\n", eid, exe_step);
 		}
 
-		on fin from EXE to DONE 
+		on fin from EXE to IDLE 
 		provided(exe_step == MAX_TASK_EXECUTION_STEP)
 		do {
-			printf("[EH] on fin from EXE to DONE, id:%d\n", eid);
+			exe_step = 0;
+			printf("[EH] on fin from EXE to IDLE, id:%d\n", eid);
 		}
 
 		on pre from EXE to SUSP do {
@@ -539,10 +550,12 @@ package sched
 			count_down = count_down - 1;
 		}
 		
-		on sig from EXE to INIT
+		on sig from EXE to EXE
 		provided (count_down == 0)
 		do {
 			printf("[Timer] on sig from EXE to INIT,  event: %d, expire in %d\n, timer ID: %d", t, expire_in, timer_id);
+			// start a interval 
+			count_down = expire_in;
 		}
 
 		priority myPrio1 * < tick provided(count_down > 0)
@@ -585,6 +598,29 @@ package sched
 		
 		on test from EXE2 to EXE2
 	end
+	
+	// Boot sequence of TOS
+	atom type TOS_BOOT() 
+		export port Port_t sched_init()
+		port Port_t platform_init()
+		export port Port_t enable_interrupt()
+		export port Port_t booted()
+		port Port_t task_loop()
+
+		place NE, SI, PI, IE, BO, SC
+
+		initial to NE
+
+		on sched_init from NE to SI
+
+		on platform_init from SI to PI
+
+		on enable_interrupt from PI to IE
+
+		on booted from IE to BO
+
+		on task_loop from BO to SC
+	end
 
 	// user defined software component
 	atom type UserApplication(int _appid, int task_count, int signal_count)
@@ -596,18 +632,21 @@ package sched
 		// port definition
 		export port Port_tv post(appid)
 		export port Port_t sig()
+		export port Port_t booted()
 		port Port_t start()
 		port Port_t ret()
 		port Port_t fin()
 		
-		place INIT, POSTING, RUNNING, FIN
+		place BOOT, INIT, POSTING, RUNNING, FIN
+	
+		initial to BOOT
 
-		initial to INIT do {
+		on booted from BOOT to INIT do {
 			init_seed();
 			appid = _appid;
 			printf("[UA] APP %d init\n", appid);
-		} 
-		
+		}
+
 		on start from INIT to RUNNING do {
 			printf("[UA] APP %d begins running\n", appid);
 		}
@@ -711,6 +750,7 @@ package sched
 	// main
 	compound  type  Compound() 
 		// components
+		component TOS_BOOT tb()
     		component TaskScheduler ts()
 		component EventScheduler es()
 
@@ -725,6 +765,12 @@ package sched
 
 		component Environment env() 
 
+		// System Boot
+		connector Conn2 scheduler_init(tb.sched_init, ts.init)
+		connector Conn2 interrupt_init (tb.enable_interrupt, es.init)
+		// booted application
+		connector Conn_Boot app_boot(tb.booted, app1.booted)
+	
 		// connectors
 		// post task
 		connector Conn3_P post_task1(app1.post, ts.post, th_app1_1.init)
@@ -760,7 +806,7 @@ package sched
 		connector Conn2_Begin     begin_event1(eh_sen1_data_ready.beg, es.beg)
 		connector Conn2_Finish_1  fin_event1(eh_sen1_data_ready.fin, es.fin)
 
-		// Timer sig, it will sig when expired
+		// Timer sig, it will sig when expired1, it will signal a Periodic
 		connector Conn2                  set_timer1(app1.sig, timer1.post)
 		connector Conn3_Timer_Sig  sig_timer1(timer1.sig, es.sig, eh_timer.init)
 		connector Conn2_Begin        beg_timer1(eh_timer.beg, es.beg)
