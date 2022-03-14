@@ -49,7 +49,7 @@ package sched
 	connector type Conn2(Port_t p1, Port_t p2)
 		define p1 p2	
 	end
-	
+
 	connector type Conn3(Port_tv p1, Port_t p2, Port_t p3)
 		define p1 p2 p3
 	end
@@ -64,7 +64,7 @@ package sched
 		}
 	end
 
-	connector type Conn2_Sen_Repo(Port_tv p1, Port_tv p2)
+	connector type Conn2_V2(Port_tv p1, Port_tv p2)
 		define p1 p2	// sen env
 		on p1 p2
 		provided (p2.v != UNDEFINED)
@@ -184,12 +184,13 @@ package sched
 		data int tid = UNDEFINED
 		data int temp =UNDEFINED
 		data int flag_is_running = DISABLE
+		data int flag_is_es_free = UNDEFINED
 		
    		 // port instance define
    		export port Port_t beg()
   		export port Port_t fin()
     		export port Port_tta post(tid, appid)	
-		port Port_t tick() // spinning	
+		export port Port_tv tick(flag_is_es_free) // spinning	
 
     		// place define
     		place FREE, BUSY
@@ -270,7 +271,7 @@ package sched
 		// variable difination
 		data int e_count = 0
 		data int stack_size = 0
-		data int is_es_idle = DISABLE
+		export data int is_es_idle = DISABLE
 		data int eid = 0
 
 		// exported port defination
@@ -278,8 +279,7 @@ package sched
 		export port Port_t pre()
 		export port Port_t fin()
 		export port Port_tv sig(eid)
-		export port Port_t res1()  // which e_count == 0
-		export port Port_t res2() // which e_count != 0
+		export port Port_t res()  // which e_count == 0
 		export port Port_tv test(is_es_idle)
 	
 		// state defination
@@ -331,13 +331,13 @@ package sched
 			printf("[ES] on fin from BUSY1 to BUSY2, ec: %d, ss: %d\n", e_count, stack_size);
 		}
 
-		on res2 from BUSY2 to BUSY1
+		on res from BUSY2 to BUSY1
 		provided(e_count > 0)
 		do {
 			printf("[ES] on res from BUSY2 to BUSY1, ec: %d, ss: %d\n", e_count, stack_size);
 		}
 
-		on res1 from BUSY2 to IDLE
+		on res from BUSY2 to IDLE
 		provided(e_count == 0)
 		do {
 			printf("[ES] on res from BUSY2 to IDLE, ec: %d, ss: %d\n", e_count, stack_size);
@@ -531,11 +531,11 @@ package sched
 		}
 
 		on tick from EXE to EXE
-		provided (count_down >= 1)
+		provided (count_down > 0)
 		do {
 			// todo: real time related?
-			count_down = count_down - 1;
 			printf("[Timer] on tick from EXE to EXE, remain countdown %d/%d", count_down, expire_in);
+			count_down = count_down - 1;
 		}
 		
 		on sig from EXE to INIT
@@ -543,6 +543,8 @@ package sched
 		do {
 			printf("[Timer] on sig from EXE to INIT,  event: %d, expire in %d\n, timer ID: %d", t, expire_in, timer_id);
 		}
+
+		priority myPrio1 * < tick provided(count_down > 0)
 	end
 
 	atom type Sensor(int _sid)		
@@ -637,7 +639,7 @@ package sched
 
 	atom type RadioSender(int id)
 		// data definition
-		data string packet 
+		data string packet = " "
 		// port definition
 		export port Port_t sig()
 		export port Port_t broadcast()
@@ -658,7 +660,7 @@ package sched
 	
 	atom type RadioReceiver(int id)
 		// data dedinition
-		data string packet
+		data string packet = " "
 		// port definition
 		export port Port_tr listen(packet)
 		export port Port_t  sig()
@@ -742,15 +744,15 @@ package sched
 							eh_sen1_data_ready.pre, 
 							eh_timer.pre)
 		
-		connector Conn2 test_res1(es.res1, th_app1_1.res)
-		connector Conn2 test_res2(es.res1, th_app1_2.res)
-		connector Conn2 test_res3(es.res1, ch_sen1_get_data.res)
-		connector Conn2 test_res4(es.res1, eh_sen1_data_ready.res)
-		connector Conn2 test_res5(es.res1, eh_timer.res)
+		connector Conn2 test_res1(es.res, th_app1_1.res)
+		connector Conn2 test_res2(es.res, th_app1_2.res)
+		connector Conn2 test_res3(es.res, ch_sen1_get_data.res)
+		connector Conn2 test_res4(es.res, eh_sen1_data_ready.res)
+		connector Conn2 test_res5(es.res, eh_timer.res)
 
 		// Command handler :TempRead.read() == SUCCESS
 		connector Conn4_Sen_Begin sen_ch_beg(app1.sig, ch_sen1_get_data.beg, sen1.read, env.read)	
-		connector Conn2_Sen_Repo  sen_repo(ch_sen1_get_data.fin, sen1.test)
+		connector Conn2_V2  sen_repo(ch_sen1_get_data.fin, sen1.test)
 		
 		// Sensor sig, it will sig anytime
 		connector Conn4_S            sig_event1(sen1.sig, es.sig, eh_sen1_data_ready.init, ch_sen1_get_data.done)
@@ -762,5 +764,10 @@ package sched
 		connector Conn3_Timer_Sig  sig_timer1(timer1.sig, es.sig, eh_timer.init)
 		connector Conn2_Begin        beg_timer1(eh_timer.beg, es.beg)
 		connector Conn2_Finish_1     fin_timer1(eh_timer.fin, es.fin)
+
+		// extern connector 
+		// make sure tick excute after ts and es is free
+		connector Conn2_V2 ts_es_free(ts.tick, es.test)
+		priority ts_tick_minimal1 ts_es_free: * < * : * provided (es.is_es_idle == 0)
 	end
 end
