@@ -1,4 +1,4 @@
-@cpp(src="ext-cpp/my_helper.cpp,ext-cpp/scheduler_basic.cpp", include="my_helper.hpp,scheduler_basic.hpp")
+@cpp(src="ext-cpp/my_helper.cpp,ext-cpp/scheduler_basic.cpp,ext-cpp/trace_helper.cpp",include="my_helper.hpp,scheduler_basic.hpp,trace_helper.hpp")
 package sched
 	// Constants definition
 	const data int TASK_BUFFER_LIMIT = 255
@@ -34,6 +34,8 @@ package sched
 	extern function int get_size()
 	extern function create_stack(int)
 	extern function destroy_stack()
+	// trace
+	extern function trace_i(string, int)
 	
 	// Port dinfinition
 	port type Port_t()
@@ -111,23 +113,23 @@ package sched
 		
 		on es  p1                  down {
 			push(p1.tid);
-			printf(">>>>>>  [Conn4_Preem] preempted tasks is stacked, they are %d\n", p1.tid);
+			printf(">>>>>>  [Conn4_Preem] preempted tasks is stacked, %d\n", p1.tid);
 		}
 		on es     p2               down {
 			push(p2.tid);
-			printf(">>>>>>  [Conn4_Preem] preempted tasks is stacked, they are %d\n", p2.tid);
+			printf(">>>>>>  [Conn4_Preem] preempted tasks is stacked, %d\n", p2.tid);
 		}
 		on es           p3         down {
 			push(p3.tid);
-			printf(">>>>>>  [Conn4_Preem] preempted tasks is stacked, they are %d\n", p3.tid);
+			printf(">>>>>>  [Conn4_Preem] preempted tasks is stacked, %d\n", p3.tid);
 		}
 		on es               p4     down {
 			push(p4.tid);
-			printf(">>>>>>  [Conn4_Preem] preempted tasks is stacked, they are %d\n", p4.tid);
+			printf(">>>>>>  [Conn4_Preem] preempted tasks is stacked, %d\n", p4.tid);
 		}
 		on es                   p5 down {
 			push(p5.tid);
-			printf(">>>>>>  [Conn4_Preem] preempted tasks is stacked, they are %d\n", p5.tid);
+			printf(">>>>>>  [Conn4_Preem] preempted tasks is stacked, %d\n", p5.tid);
 		}
 		on es                        down {
 			// no task is running ,just do the event
@@ -144,8 +146,7 @@ package sched
 			th_bound.tid = get_rand(255); 
 			th_bound.appid = app.v;
 			ts.tid = th_bound.tid;
-			ts.appid = app.v;
-			printf(">>>>>>[Conn3_PS] tid:%d\n", th_bound.tid);		
+			ts.appid = app.v;	
 		}
 	end
 
@@ -279,7 +280,7 @@ package sched
 		export port Port_t pre()
 		export port Port_t fin()
 		export port Port_tv sig(eid)
-		export port Port_t res()  // which e_count == 0
+		export port Port_t res()
 		export port Port_tv test(is_es_idle)
 	
 		// state defination
