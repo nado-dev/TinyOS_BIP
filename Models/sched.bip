@@ -85,12 +85,11 @@ package sched
 	connector type Conn2_Finish_1(Port_tv p1, Port_t p2)
 		define p1 p2	
 		on p1 p2
-		provided(p1.v != 0)
 	end
 
-	// for event beginning
-	connector type Conn2_Begin(Port_t p1, Port_t p2)
-		define p1 p2
+	connector type Conn3_Finish(Port_tv p1, Port_t p2, Port_t p3)
+		define p1 p2 p3
+		on p1 p2 p3
 	end
 
 	// test: for 2-TH only , act like a boradcast
@@ -98,18 +97,20 @@ package sched
 		define es' p1
 		on es down {
 			// no task is running ,just do the event
-			printf(">>>>>> [Conn2_Preem] no task now, on p1 down\n");
+			printf("                [Conn2_Preem] no task now, on p1 down\n");
 		}
 		on es p1 down {
 			// stack the tids which are preempted
 			push(p1.tid);
-			printf(">>>>>>  [Conn2_Preem] preempted tasks is stacked, they are %d\n", p1.tid);
+			printf("                [Conn2_Preem] preempted tasks is stacked, they are %d\n", p1.tid);
 		}
 	end
 
 	connector type Conn_Boot(Port_t tb, Port_t p1)
 		define tb' p1
-		on tb p1 down {printf("[Conn_Boot] p1 booted\n");}
+		on tb p1 down {
+			printf("                [Conn_Boot] p1 booted\n");
+		}
 	end
 
 	// test: for 4-TH/CH only , act like a boradcast
@@ -118,27 +119,23 @@ package sched
 		
 		on es  p1                  down {
 			push(p1.tid);
-			printf(">>>>>>  [Conn4_Preem] preempted tasks is stacked, %d\n", p1.tid);
+			printf("                [Conn4_Preem] preempted tasks is stacked, %d\n", p1.tid);
 		}
 		on es     p2               down {
 			push(p2.tid);
-			printf(">>>>>>  [Conn4_Preem] preempted tasks is stacked, %d\n", p2.tid);
+			printf("                [Conn4_Preem] preempted tasks is stacked, %d\n", p2.tid);
 		}
 		on es           p3         down {
 			push(p3.tid);
-			printf(">>>>>>  [Conn4_Preem] preempted tasks is stacked, %d\n", p3.tid);
+			printf("                [Conn4_Preem] preempted tasks is stacked, %d\n", p3.tid);
 		}
 		on es               p4     down {
 			push(p4.tid);
-			printf(">>>>>>  [Conn4_Preem] preempted tasks is stacked, %d\n", p4.tid);
+			printf("                [Conn4_Preem] preempted tasks is stacked, %d\n", p4.tid);
 		}
 		on es                   p5 down {
 			push(p5.tid);
-			printf(">>>>>>  [Conn4_Preem] preempted tasks is stacked, %d\n", p5.tid);
-		}
-		on es                        down {
-			// no task is running ,just do the event
-			printf(">>>>>> [Conn4_Preem] no task now, on es down\n");
+			printf("                [Conn4_Preem] preempted tasks is stacked, %d\n", p5.tid);
 		}
 	end
 
@@ -158,7 +155,6 @@ package sched
 	connector type Conn3_Timer_Sig(Port_t timer, Port_tv es, Port_tv3 eh)
 		define timer es eh
 		on timer es eh
-		provided (eh.v1 == 0)
 		down {
 			eh.v1 = get_rand(255); 
 			eh.v2 = -2;
@@ -206,6 +202,7 @@ package sched
 		
 		on init from BOOT to FREE do {
 			// initial of task queue
+			printf("                [TS] on init from BOOT to FREE\n");
 			scheuler_init(); 
 		}
 
@@ -215,7 +212,7 @@ package sched
 			flag_is_running = ENABLE;
 			pop_task();
 			task_count = get_task_count();
-			printf("[TS] on beg from FREE to BUSY tc:%d\n", task_count);
+			printf("                [TS] on beg from FREE to BUSY tc:%d\n", task_count);
 		}
 
     		on post from FREE to FREE 
@@ -226,9 +223,9 @@ package sched
 			if (tid != UNDEFINED && temp == ENABLE) 
 			then 
 				task_count = get_task_count();
-				printf("[TS] on post from FREE to FREE, new tid:------%d, tc:%d\n", tid, task_count);
+				printf("                [TS] on post from FREE to FREE, new tid:------%d, tc:%d\n", tid, task_count);
 			else 
-				printf("[USER_DEFINE_ERROR] push failed: %d, errno: %d\n", tid, temp);
+				printf("                [USER_DEFINE_ERROR] push failed: %d, errno: %d\n", tid, temp);
 			fi
 			temp = UNDEFINED;
 		}
@@ -241,9 +238,9 @@ package sched
 			if (tid != UNDEFINED && temp == ENABLE) 
 			then 
 				task_count = get_task_count();
-				printf("[TS] on post from BUSY to BUSY tc:%d\n", task_count);
+				printf("                [TS] on post from BUSY to BUSY tc:%d\n", task_count);
 			else 
-				printf("[USER_DEFINE_ERROR] push failed: %d, errno: %d\n", tid, temp);
+				printf("                [USER_DEFINE_ERROR] push failed: %d, errno: %d\n", tid, temp);
 			fi
 			temp = UNDEFINED;
 		}
@@ -253,22 +250,19 @@ package sched
 			ptv = pop_task();
 			if(ptv == NO_TASK) 
 			then 
-				printf("[USER_DEFINE_ERROR] pop failed, NO_TASK\n");
+				printf("                [USER_DEFINE_ERROR] pop failed, NO_TASK\n");
 			else 
 				task_count = get_task_count();
 				printf("------ popped task tid %d\n", ptv);
 			fi
-			printf("[TS] on fin from BUSY to FREE do tc:%d\n", task_count);
+			printf("                [TS] on fin from BUSY to FREE do tc:%d\n", task_count);
 			ptv = UNDEFINED;
 			tid = UNDEFINED;
 		}	
 
 		on tick from FREE to FREE
 		provided (task_count == 0)
-		do {
-			printf("[TS] TS is free now, spinnig\n");
-		}
-
+		
 			// priority definition
 		// priority ts_tick_minimal tick < *
 	end
@@ -281,6 +275,7 @@ package sched
 		data int stack_size = 0
 		export data int is_es_idle = DISABLE
 		data int eid = 0
+		data int popped_id = -1
 
 		// exported port defination
 		export port Port_t init()
@@ -302,56 +297,55 @@ package sched
 			is_es_idle = ENABLE;
 			e_count = 0;
 			stack_size = 0;
-			printf("[ES] initial to IDLE, ec: %d, ss: %d \n", e_count, stack_size);
+			printf("                [ES] initial to IDLE, ec: %d, ss: %d \n", e_count, stack_size);
 		}
 
 		// only when ES is IDLE, TS can start a new task
 		on test from IDLE to IDLE do {
 			is_es_idle = ENABLE;
-			printf("[ES] ES is still IDLE now, spinning\n");
 		}
 
 		on sig from IDLE to ACCEPT do {
 			is_es_idle = DISABLE;
-			printf("[ES] on sig from IDLE to ACCEPT, ec: %d, ss: %d\n", e_count, stack_size);
+			printf("                [ES] on sig from IDLE to ACCEPT, ec: %d, ss: %d\n", e_count, stack_size);
 		} 
 
 		on pre from ACCEPT to PREEMPT do {
 			stack_size = get_size();
-			printf("[ES] on pre from ACCEPT to PREEMPT, ec: %d, ss: %d\n", e_count, stack_size);
+			printf("                [ES] on pre from ACCEPT to PREEMPT, ec: %d, ss: %d\n", e_count, stack_size);
 		}
 
 		on beg from PREEMPT to BUSY1 do {
 			e_count = e_count + 1;
-			printf("[ES] on beg from PREEMPT to BUSY1, ec: %d, ss: %d\n", e_count, stack_size);
+			printf("                [ES] on beg from PREEMPT to BUSY1, ec: %d, ss: %d\n", e_count, stack_size);
 		}
 		
 		on fin from BUSY1 to IDLE 
 		provided(stack_size == 0)
 		do {
 			e_count = e_count - 1;
-			printf("[ES] on fin from BUSY1 to IDLE, ec: %d, ss: %d\n", e_count, stack_size);
+			printf("                [ES] on fin from BUSY1 to IDLE, ec: %d, ss: %d\n", e_count, stack_size);
 		}
 		
 		on fin from BUSY1 to BUSY2
 		provided(stack_size != 0)
 		do {
-			pop(); 	// pop from stack
+			popped_id = pop(); 	// pop from stack
 			stack_size = get_size();
 			e_count = e_count - 1;
-			printf("[ES] on fin from BUSY1 to BUSY2, ec: %d, ss: %d\n", e_count, stack_size);
+			printf("                [ES] on fin from BUSY1 to BUSY2, ec: %d, ss: %d,  popped id: %d\n", e_count, stack_size, popped_id);
 		}
 
 		on res from BUSY2 to BUSY1
 		provided(e_count > 0)
 		do {
-			printf("[ES] on res from BUSY2 to BUSY1, ec: %d, ss: %d\n", e_count, stack_size);
+			printf("                [ES] on res from BUSY2 to BUSY1, ec: %d, ss: %d\n", e_count, stack_size);
 		}
 
 		on res from BUSY2 to IDLE
 		provided(e_count == 0)
 		do {
-			printf("[ES] on res from BUSY2 to IDLE, ec: %d, ss: %d\n", e_count, stack_size);
+			printf("                [ES] on res from BUSY2 to IDLE, ec: %d, ss: %d\n", e_count, stack_size);
 		}
 
 		// priority definition, it means when 'sig' interaction comes, 'test' interaction must step back 
@@ -377,16 +371,14 @@ package sched
 		place IDLE, BOUND, EXE, SUSP, DONE
 
 		// behavior definition
-		initial to IDLE do {	
-			printf("[TH] initial to IDLE\n");
-		}
+		initial to IDLE
 
 		on init from IDLE to BOUND do {
-			printf("[TH] on init from IDLE to BOUND do , appid: %d, id: %d\n", appid, tid);
+			printf("                [TH] on init from IDLE to BOUND do , appid: %d, id: %d\n", appid, tid);
 		}
 		
 		on beg from BOUND to EXE do{
-			printf("[TH] on begin from IDLE to EXE, id:%d\n", tid);
+			printf("                [TH] on begin from IDLE to EXE, id:%d\n", tid);
 		} 
 
 		// this is internal
@@ -394,21 +386,21 @@ package sched
 		provided(exe_step < MAX_TASK_EXECUTION_STEP)
 		do {
 			exe_step = exe_step + 1;
-			printf("[TH] executing, id:%d, step: %d\n", tid, exe_step);
+			printf("                [TH] executing, id:%d, step: %d\n", tid, exe_step);
 		}
 
 		on fin from EXE to DONE 
 		provided(exe_step == MAX_TASK_EXECUTION_STEP)
 		do {
-			printf("[TH] on fin from EXE to DONE, id:%d\n", tid);
+			printf("                [TH] on fin from EXE to DONE, id:%d\n", tid);
 		}
 
 		on pre from EXE to SUSP do {
-			 printf("[TH] on pre from EXE to SUSP, th is premeeted, going to SUSPEND, id:%d\n", tid);
+			 printf("                [TH] on pre from EXE to SUSP, th is premeeted, going to SUSPEND, id:%d\n", tid);
 		}
 
 		on res from SUSP to EXE do {
-			printf("[TH] on res from SUSP to EXE, id:%d\n", tid);
+			printf("                [TH] on res from SUSP to EXE, id:%d\n", tid);
 		}
 			
 	end
@@ -433,18 +425,15 @@ package sched
 		place IDLE, BOUND, EXE, SUSP
 
 		// behavior definition
-		initial to IDLE do {
-			eid = 0;
-			printf("[EH] initial to IDLE\n");
-		}
+		initial to IDLE
 
 		on init from IDLE to BOUND do {
-			printf("[EH] on init from IDLE to BOUND do ,id: %d\n", eid);
-			printf("[EH] read from Sensor: state: %d, value: %d\n", state, value);
+			printf("                [EH] on init from IDLE to BOUND do ,id: %d\n", eid);
+			printf("                [EH] read value: state: %d, value: %d\n", state, value);
 		}
 		
 		on beg from BOUND to EXE do{
-			printf("[EH] on begin from IDLE to EXE, id:%d\n", eid);
+			printf("                [EH] on begin from IDLE to EXE, id:%d\n", eid);
 		} 
 
 		// this is internal
@@ -452,22 +441,26 @@ package sched
 		provided(exe_step < MAX_TASK_EXECUTION_STEP)
 		do {
 			exe_step = exe_step + 1;
-			printf("[EH] executing, id:%d, step: %d\n", eid, exe_step);
+			printf("                [EH] executing, id:%d, step: %d\n", eid, exe_step);
 		}
 
 		on fin from EXE to IDLE 
 		provided(exe_step == MAX_TASK_EXECUTION_STEP)
 		do {
 			exe_step = 0;
-			printf("[EH] on fin from EXE to IDLE, id:%d\n", eid);
+			eid = 0;
+			state= 0;
+			value = 0;
+			appid = -1;
+			printf("                [EH] on fin from EXE to IDLE, id:%d\n", eid);
 		}
 
 		on pre from EXE to SUSP do {
-			 printf("[EH] on pre from EXE to SUSP, th is premeeted, going to SUSPEND, id:%d\n", eid);
+			 printf("                [EH] on pre from EXE to SUSP, th is premeeted, going to SUSPEND, id:%d\n", eid);
 		}
 
 		on res from SUSP to EXE do {
-			printf("[EH] on res from SUSP to EXE, id:%d\n", eid);
+			printf("                [EH] on res from SUSP to EXE, id:%d\n", eid);
 		}
 			
 	end
@@ -495,35 +488,39 @@ package sched
 			cid = _cid;
 			appid = _appid;
 			read_state = DISABLE;
-			printf("[CH] initial to IDLE\n");
 		}
 		
 		on beg from IDLE to EXE do{
-			printf("[CH] on begin from IDLE to EXE, cid:%d\n", cid);
+			printf("                [CH] on begin from IDLE to EXE, cid:%d\n", cid);
 		} 
 
 		on fin from EXE to DONE 
 		do {
-			printf("[CH] on fin from EXE to DONE, cid:%d, >>>[read_state]: %d\n", cid, read_state);
+			printf("                [CH] on fin from EXE to DONE, cid:%d, >>>[read_state]: %d\n", cid, read_state);
 		}
 
 		on pre from EXE to SUSP do {
-			printf("[CH] on pre from EXE to SUSP, th is premeeted, going to SUSPEND, cid:%d\n", cid);
+			printf("                [CH] on pre from EXE to SUSP, th is premeeted, going to SUSPEND, cid:%d\n", cid);
 		}
 
 		on res from SUSP to EXE do {
-			printf("[CH] on res from SUSP to EXE, cid:%d\n", cid);
+			printf("                [CH] on res from SUSP to EXE, cid:%d\n", cid);
 		}
 		
 		on done from DONE to DONE
 	end
 	
 	atom type Timer( int timer_id, int expire_in) 
+
 		data int count_down = UNDEFINED
 		data int t = 0
+		data int flag_is_posted = DISABLE
+
 		// port definition
 		export port Port_t post()
 		export port Port_t sig()
+		export port Port_t stop()
+		export port Port_t interval()
 		port Port_t tick()
 		
 		// state definition
@@ -532,33 +529,45 @@ package sched
 		// interaction definition
 		initial to INIT do {
 			count_down = 0;
-			printf("[Timer] timer %d init\n", timer_id);
 		}
 	
 		on post from INIT to EXE 
-		provided (count_down == 0)
+		provided (count_down == 0 && flag_is_posted == DISABLE)
+		do {
+			flag_is_posted = ENABLE;
+			count_down = expire_in;
+			printf("                [Timer] on post from INIT to EXE, new event set:%d, expire in:%d, timer ID: %d\n", t, expire_in, timer_id);
+		}
+
+		on interval from INIT to EXE
+		provided (count_down == 0 && flag_is_posted == ENABLE)
 		do {
 			count_down = expire_in;
-			printf("[Timer] on post from EXE to EXE, new event set:%d, expire in:%d, timer ID: %d\n", t, expire_in, timer_id);
+			printf("                [Timer] on interval from INIT to EXE, new event set:%d, expire in:%d, timer ID: %d\n", t, expire_in, timer_id);
 		}
 
 		on tick from EXE to EXE
 		provided (count_down > 0)
 		do {
 			// todo: real time related?
-			printf("[Timer] on tick from EXE to EXE, remain countdown %d/%d", count_down, expire_in);
+			printf("                [Timer] on tick from EXE to EXE, remain countdown %d/%d\n", count_down, expire_in);
 			count_down = count_down - 1;
 		}
 		
-		on sig from EXE to EXE
+		on sig from EXE to INIT
 		provided (count_down == 0)
 		do {
-			printf("[Timer] on sig from EXE to INIT,  event: %d, expire in %d\n, timer ID: %d", t, expire_in, timer_id);
+			printf("                [Timer] on sig from EXE to INIT\n");
 			// start a interval 
-			count_down = expire_in;
+			count_down = 0;
 		}
 
-		priority myPrio1 * < tick provided(count_down > 0)
+		on stop from EXE to INIT do {
+			count_down = 0;
+			printf("                [Timer] Timer Stopped\n");
+		}
+
+		// priority myPrio1 * < tick provided(count_down > 0)
 	end
 
 	atom type Sensor(int _sid)		
@@ -581,17 +590,16 @@ package sched
 			is_idle = ENABLE;
 			read_value = DISABLE;
 			read_state = DISABLE;
-			printf("[Sensor] sensor sid: %d\n", sid);
 		}
 
 		on read from EXE1 to EXE2 do{
 			is_idle = ENABLE;
-			printf("[Sensor] on beg from EXE1 to EXE2, sid: %d\n", sid);
+			printf("                [Sensor] on beg from EXE1 to EXE2, sid: %d\n", sid);
 		}
 
 		on sig from EXE2 to EXE1 do {	
 			is_idle = DISABLE;
-			printf("[Sensor] on sig from EXE2 to EXE1, sid: %d\n", sid);
+			printf("                [Sensor] on sig from EXE2 to EXE1, sid: %d\n", sid);
 		}
 
 		on test from EXE1 to EXE1
@@ -601,29 +609,43 @@ package sched
 	
 	// Boot sequence of TOS
 	atom type TOS_BOOT() 
+		export data int is_booted = DISABLE
+
 		export port Port_t sched_init()
 		port Port_t platform_init()
 		export port Port_t enable_interrupt()
 		export port Port_t booted()
 		port Port_t task_loop()
-
+		
+		// NE: negative, SI: scheduler init, PI: plattfrom init, IE: interrupt enable, BO: booted, SC: scheduler task loop
 		place NE, SI, PI, IE, BO, SC
 
 		initial to NE
 
-		on sched_init from NE to SI
+		on sched_init from NE to SI do {
+			printf("                [TOS_BOOT] 1. scheduler init\n");
+		}
 
-		on platform_init from SI to PI
+		on platform_init from SI to PI do {
+			printf("                [TOS_BOOT] 2. platform init\n");
+		}
 
-		on enable_interrupt from PI to IE
+		on enable_interrupt from PI to IE do {
+			printf("                [TOS_BOOT] 3. enable interrupt\n");
+		}
 
-		on booted from IE to BO
+		on booted from IE to BO do {
+			printf("                [TOS_BOOT] 4. booted\n");
+		}
 
-		on task_loop from BO to SC
+		on task_loop from BO to SC do {
+			printf("                [TOS_BOOT] 5. task loop begin\n");
+			is_booted = ENABLE;
+		}
 	end
 
-	// user defined software component
-	atom type UserApplication(int _appid, int task_count, int signal_count)
+	// Demo Application. This application can post 2 tasks, set a peroid timer to signal event, and signal a sensor
+	atom type SampleApplication(int _appid, int task_count, int signal_count)
 		
 		data int posted_task_count = 0
 		data int signaled_count = 0
@@ -644,35 +666,35 @@ package sched
 		on booted from BOOT to INIT do {
 			init_seed();
 			appid = _appid;
-			printf("[UA] APP %d init\n", appid);
+			printf("                [UA] APP %d init\n", appid);
 		}
 
 		on start from INIT to RUNNING do {
-			printf("[UA] APP %d begins running\n", appid);
+			printf("                [UA] APP %d begins running\n", appid);
 		}
 
 		on post from RUNNING to POSTING 
 		provided(posted_task_count < task_count)
 		do {
 			posted_task_count  = posted_task_count + 1;
-			printf("[UA] APP %d posting a task\n", appid);	
+			printf("                [UA] APP %d posting a task\n", appid);	
 		}
 
 		on sig from RUNNING to RUNNING 
 		provided (signaled_count < signal_count) 
 		do {
 			signaled_count = signaled_count + 1;
-			printf("[UA] APP %d signal a event\n", appid);
+			printf("                [UA] APP %d signal a event\n", appid);
 		}
 		
 		on ret from POSTING to RUNNING do {
-			printf("[UA] APP %d continue to run\n", appid); 
+			printf("                [UA] APP %d continue to run\n", appid); 
 		}
 
 		on fin from RUNNING to FIN 
 		provided(posted_task_count == task_count && signaled_count == signal_count)
 		do {
-			printf("[UA] APP %d is done\n", appid);
+			printf("                [UA] APP %d is done\n", appid);
 		}	
 		
 	end
@@ -757,7 +779,7 @@ package sched
 		// component Timer timer1(111)
 		component Sensor sen1(456)	
 		component Timer timer1(6324, 3)	
-		component UserApplication app1(1, 2, 2)
+		component SampleApplication app1(1, 2, 2)
 
 		component TaskHandler th_app1_1(), th_app1_2()
 		component EventHandler eh_sen1_data_ready(), eh_timer()
@@ -803,18 +825,19 @@ package sched
 		
 		// Sensor sig, it will sig anytime
 		connector Conn4_S            sig_event1(sen1.sig, es.sig, eh_sen1_data_ready.init, ch_sen1_get_data.done)
-		connector Conn2_Begin     begin_event1(eh_sen1_data_ready.beg, es.beg)
+		connector Conn2                begin_event1(eh_sen1_data_ready.beg, es.beg)
 		connector Conn2_Finish_1  fin_event1(eh_sen1_data_ready.fin, es.fin)
 
 		// Timer sig, it will sig when expired1, it will signal a Periodic
 		connector Conn2                  set_timer1(app1.sig, timer1.post)
 		connector Conn3_Timer_Sig  sig_timer1(timer1.sig, es.sig, eh_timer.init)
-		connector Conn2_Begin        beg_timer1(eh_timer.beg, es.beg)
-		connector Conn2_Finish_1     fin_timer1(eh_timer.fin, es.fin)
+		connector Conn2                   beg_timer1(eh_timer.beg, es.beg)
+		connector Conn3_Finish         fin_timer1(eh_timer.fin, es.fin, timer1.interval)
 
 		// extern connector 
 		// make sure tick excute after ts and es is free
 		connector Conn2_V2 ts_es_free(ts.tick, es.test)
 		priority ts_tick_minimal1 ts_es_free: * < * : * provided (es.is_es_idle == 0)
+		// priority ts_tick_booted ts_es_free:ts.tick < app_boot:tb.booted provided(tb.is_booted == DISABLE)
 	end
 end

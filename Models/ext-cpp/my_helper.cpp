@@ -57,7 +57,9 @@ void push(int value)
 int pop(void)
 {
     assert(!stack_is_empty());
-    return stack[top_element--];
+    int temp = top_element;
+    top_element = top_element -1;
+    return stack[temp];
 }
 
 int top(void)
