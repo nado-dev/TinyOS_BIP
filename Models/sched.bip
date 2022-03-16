@@ -510,7 +510,7 @@ package sched
 		on done from DONE to DONE
 	end
 	
-	atom type Timer( int timer_id, int expire_in) 
+	atom type Timer( int timer_id, int expire_in, int is_one_shot) 
 
 		data int count_down = UNDEFINED
 		data int t = 0
@@ -524,7 +524,7 @@ package sched
 		port Port_t tick()
 		
 		// state definition
-		place INIT, EXE
+		place INIT, EXE, DONE
 		
 		// interaction definition
 		initial to INIT do {
@@ -532,7 +532,7 @@ package sched
 		}
 	
 		on post from INIT to EXE 
-		provided (count_down == 0 && flag_is_posted == DISABLE)
+		provided (count_down == 0 && flag_is_posted == DISABLE && is_one_shot == DISABLE)
 		do {
 			flag_is_posted = ENABLE;
 			count_down = expire_in;
@@ -555,12 +555,21 @@ package sched
 		}
 		
 		on sig from EXE to INIT
-		provided (count_down == 0)
+		provided (count_down == 0 && is_one_shot == DISABLE)
 		do {
 			printf("                [Timer] on sig from EXE to INIT\n");
 			// start a interval 
 			count_down = 0;
 		}
+
+		on sig from EXE to DONE
+		provided (count_down == 0 && is_one_shot == ENABLE)
+		do {
+			printf("                [Timer] on sig from DONE to INIT\n");
+			// start a interval 
+			count_down = 0;
+		}
+
 
 		on stop from EXE to INIT do {
 			count_down = 0;
@@ -778,7 +787,7 @@ package sched
 
 		// component Timer timer1(111)
 		component Sensor sen1(456)	
-		component Timer timer1(6324, 3)	
+		component Timer timer1(6324, 3, 0)	
 		component SampleApplication app1(1, 2, 2)
 
 		component TaskHandler th_app1_1(), th_app1_2()
