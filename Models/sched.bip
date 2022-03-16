@@ -92,20 +92,6 @@ package sched
 		on p1 p2 p3
 	end
 
-	// test: for 2-TH only , act like a boradcast
-	connector type Conn2_Preem(Port_t es, Port_tta p1)
-		define es' p1
-		on es down {
-			// no task is running ,just do the event
-			printf("                [Conn2_Preem] no task now, on p1 down\n");
-		}
-		on es p1 down {
-			// stack the tids which are preempted
-			push(p1.tid);
-			printf("                [Conn2_Preem] preempted tasks is stacked, they are %d\n", p1.tid);
-		}
-	end
-
 	connector type Conn_Boot(Port_t tb, Port_t p1)
 		define tb' p1
 		on tb p1 down {
@@ -116,7 +102,9 @@ package sched
 	// test: for 4-TH/CH only , act like a boradcast
 	connector type Conn6_Preem(Port_t es, Port_tta p1, Port_tta p2, Port_tta p3, Port_tta p4, Port_tta p5)
 		define es' p1 p2 p3 p4 p5
-		
+		on es                        down {
+			printf("                [Conn4_Preem] no task is preemted\n");
+		}
 		on es  p1                  down {
 			push(p1.tid);
 			printf("                [Conn4_Preem] preempted tasks is stacked, %d\n", p1.tid);
@@ -178,7 +166,7 @@ package sched
 	end
 
 	// atom: Model of Task Schduler
-	atom type TaskScheduler()
+	atom type TaskScheduler(int enable)
    		 // variable definition
     		data int task_count = 0
 		data int ptv = UNDEFINED
@@ -206,8 +194,7 @@ package sched
 			scheuler_init(); 
 		}
 
-   		on beg from FREE to BUSY
-		provided (task_count != 0 && flag_is_running == DISABLE)	
+   		on beg from FREE to BUSY provided (task_count != 0 && flag_is_running == DISABLE && enable == ENABLE)	
  		do {	
 			flag_is_running = ENABLE;
 			pop_task();
@@ -215,8 +202,7 @@ package sched
 			printf("                [TS] on beg from FREE to BUSY tc:%d\n", task_count);
 		}
 
-    		on post from FREE to FREE 
-		provided (task_count < TASK_BUFFER_LIMIT)
+    		on post from FREE to FREE provided (task_count < TASK_BUFFER_LIMIT)
 		do{
 			temp = push_task(tid);
 			// add to queue
@@ -230,8 +216,7 @@ package sched
 			temp = UNDEFINED;
 		}
 
-    		on post from BUSY to BUSY 
-		provided (task_count < TASK_BUFFER_LIMIT)
+    		on post from BUSY to BUSY provided (task_count < TASK_BUFFER_LIMIT)
 		do{
 			temp = push_task(tid);
 			// add to queue
@@ -253,18 +238,15 @@ package sched
 				printf("                [USER_DEFINE_ERROR] pop failed, NO_TASK\n");
 			else 
 				task_count = get_task_count();
-				printf("------ popped task tid %d\n", ptv);
+				printf("                [TS]popped task tid %d\n", ptv);
 			fi
 			printf("                [TS] on fin from BUSY to FREE do tc:%d\n", task_count);
 			ptv = UNDEFINED;
 			tid = UNDEFINED;
 		}	
 
-		on tick from FREE to FREE
-		provided (task_count == 0)
-		
-			// priority definition
-		// priority ts_tick_minimal tick < *
+		on tick from FREE to FREE provided (task_count == 0)
+
 	end
 
 
@@ -301,9 +283,7 @@ package sched
 		}
 
 		// only when ES is IDLE, TS can start a new task
-		on test from IDLE to IDLE do {
-			is_es_idle = ENABLE;
-		}
+		on test from IDLE to IDLE do {is_es_idle = ENABLE;}
 
 		on sig from IDLE to ACCEPT do {
 			is_es_idle = DISABLE;
@@ -318,7 +298,7 @@ package sched
 		on beg from PREEMPT to BUSY1 do {
 			e_count = e_count + 1;
 			printf("                [ES] on beg from PREEMPT to BUSY1, ec: %d, ss: %d\n", e_count, stack_size);
-		}
+		}	
 		
 		on fin from BUSY1 to IDLE 
 		provided(stack_size == 0)
@@ -327,8 +307,7 @@ package sched
 			printf("                [ES] on fin from BUSY1 to IDLE, ec: %d, ss: %d\n", e_count, stack_size);
 		}
 		
-		on fin from BUSY1 to BUSY2
-		provided(stack_size != 0)
+		on fin from BUSY1 to BUSY2 provided(stack_size != 0)
 		do {
 			popped_id = pop(); 	// pop from stack
 			stack_size = get_size();
@@ -336,8 +315,7 @@ package sched
 			printf("                [ES] on fin from BUSY1 to BUSY2, ec: %d, ss: %d,  popped id: %d\n", e_count, stack_size, popped_id);
 		}
 
-		on res from BUSY2 to BUSY1
-		provided(e_count > 0)
+		on res from BUSY2 to BUSY1 provided(e_count > 0)
 		do {
 			printf("                [ES] on res from BUSY2 to BUSY1, ec: %d, ss: %d\n", e_count, stack_size);
 		}
@@ -347,10 +325,6 @@ package sched
 		do {
 			printf("                [ES] on res from BUSY2 to IDLE, ec: %d, ss: %d\n", e_count, stack_size);
 		}
-
-		// priority definition, it means when 'sig' interaction comes, 'test' interaction must step back 
-		// priority idle_state_change test < sig
-		
 	end	
 
 	// atom type of Task and Event Handler
@@ -382,15 +356,13 @@ package sched
 		} 
 
 		// this is internal
-		on exe from EXE to EXE 
-		provided(exe_step < MAX_TASK_EXECUTION_STEP)
+		on exe from EXE to EXE provided(exe_step < MAX_TASK_EXECUTION_STEP)
 		do {
 			exe_step = exe_step + 1;
 			printf("                [TH] executing, id:%d, step: %d\n", tid, exe_step);
 		}
 
-		on fin from EXE to DONE 
-		provided(exe_step == MAX_TASK_EXECUTION_STEP)
+		on fin from EXE to DONE provided(exe_step == MAX_TASK_EXECUTION_STEP)
 		do {
 			printf("                [TH] on fin from EXE to DONE, id:%d\n", tid);
 		}
@@ -437,15 +409,13 @@ package sched
 		} 
 
 		// this is internal
-		on exe from EXE to EXE 
-		provided(exe_step < MAX_TASK_EXECUTION_STEP)
+		on exe from EXE to EXE provided(exe_step < MAX_TASK_EXECUTION_STEP)
 		do {
 			exe_step = exe_step + 1;
 			printf("                [EH] executing, id:%d, step: %d\n", eid, exe_step);
 		}
 
-		on fin from EXE to IDLE 
-		provided(exe_step == MAX_TASK_EXECUTION_STEP)
+		on fin from EXE to IDLE provided(exe_step == MAX_TASK_EXECUTION_STEP)
 		do {
 			exe_step = 0;
 			eid = 0;
@@ -464,7 +434,204 @@ package sched
 		}
 			
 	end
+
+	// each time period the EH_Timer may execute once
+	atom type EH_Timer()
+		// data definition
+		data int eid = UNDEFINED	
+		data int appid =UNDEFINED
+
+		// port definition 
+		export port Port_tv init(eid)
+		export port Port_t beg()
+		export port Port_tta pre(eid, appid)
+		export port Port_t res()
+		export port Port_tv call(eid)
+
+		// state definition
+		place IDLE, BOUND, EXE, SUSP
+
+		// behavior definition
+		initial to IDLE
+
+		on init from IDLE to BOUND 
+		
+		on beg from BOUND to EXE 
+
+		// 1. call Leds.led1Toggle()
+		// 2. call Photo.read()
+		on call from EXE to IDLE 
+
+		on pre from EXE to SUSP 
+
+		on res from SUSP to EXE 
+			
+	end
+
+	atom type CH_Photo_Read(int _cid, int _appid)
+		// data definition
+		data int cid = UNDEFINED
+		data int appid = UNDEFINED
+		data int read_state = UNDEFINED
+			
+		// port definition 
+		export port Port_t beg()
+		export port Port_tta pre(cid, appid)
+		export port Port_t res()
+		export port Port_t sig()
+		
+		// state definition
+		place IDLE, EXE, SUSP
+
+		// behavior definition
+		initial to IDLE 
+		
+		on beg from IDLE to EXE
+
+		on sig from EXE to IDLE 
+
+		on pre from EXE to SUSP 
+
+		on res from SUSP to EXE 
+	end
+
+	atom type EH_Photo_ReadDone()
+		// data definition
+		data int eid = UNDEFINED	
+		data int appid =UNDEFINED
+		data int result = UNDEFINED
+		data int value = UNDEFINED
+		data int flag_last_estate = UNDEFINED
+		data int ret_callsend = UNDEFINED
+
+		// port definition 
+		export port Port_tv3 init(eid, result, value)
+		port Port_t beg()
+		export port Port_tta pre(eid, appid)
+		export port Port_t res()
+		export port Port_t call_send()
+		export port Port_tv call_led2(ret_callsend)
+
+		// state definition
+		place IDLE, BOUND, E1, E2, E3, SUSP
+
+		// behavior definition
+		initial to IDLE
+
+		on init from IDLE to BOUND 
+		
+		on beg from BOUND to E1 provided (result == ENABLE)
+		// set data to send
+
+		// send data
+		on call_send from E1 to E2
+
+		on get_report from E2 to E3
+
+		on call_led2 from E3 to IDLE provided()
+
+		on pre from E1 to SUSP do {flag_last_estate = 1;}
+		on pre from E2 to SUSP do {flag_last_estate = 2;}
+		on pre from E3 to SUSP do {flag_last_estate = 3;}
+
+		on res from SUSP to E1 provided(flag_last_estate == 1)
+		on res from SUSP to E2 provided(flag_last_estate == 1)
+		on res from SUSP to E3 provided(flag_last_estate == 1)
+
+	end
+
+	atom type CH_DataMsg_Send(int _cid, int _appid)
+		// data definition
+		data int cid = UNDEFINED
+		data int appid = UNDEFINED
+		data int read_state = UNDEFINED
+		data int flag_last_e = UNDEFINED
+			
+		// port definition 
+		export port Port_t beg()
+		export port Port_tta pre(cid, appid)
+		export port Port_t res()
+		export port Port_t sig()
+		export port Port_t send()
+		
+		// state definition
+		place IDLE, E1, E2, SUSP
+
+		// behavior definition
+		initial to IDLE 
+		
+		on beg from IDLE to E1
+
+		on send from E1 to E2
+		
+		on sig from E2 to IDLE 
+
+		on pre from E1 to SUSP do {flag_last_e = 1;}
+		on pre from E2 to SUSP do {flag_last_e = 2;}
+
+		on res from SUSP to E1 provided(flag_last_e == 1)  
+		on res from SUSP to E1 provided(flag_last_e == 2)  
+	end
 	
+	atom type EH_DataMsg_SendDone()
+		// data definition
+		data int eid = UNDEFINED	
+		data int appid =UNDEFINED
+	
+		// port definition 
+		export port Port_tv init(eid)
+		port Port_t beg()
+		export port Port_tta pre(eid, appid)
+		export port Port_t res()
+		export port Port_tv call(eid)
+
+		// state definition
+		place IDLE, BOUND, EXE, SUSP
+
+		// behavior definition
+		initial to IDLE
+
+		on init from IDLE to BOUND 
+		
+		on beg from BOUND to EXE 
+		// set data to send
+		on call from EXE to IDLE
+ 
+		on pre from EXE to SUSP 
+		on res from SUSP to EXE 
+
+	end
+
+	atom type EH_Recvmsg_Receive()
+		// data definition
+		data int eid = UNDEFINED	
+		data int appid =UNDEFINED
+		data int payload = UNDEFINED
+		data int len = UNDEFINED
+
+		// port definition 
+		export port Port_tv3 init(eid, payload, len)
+		port Port_t beg()
+		export port Port_tta pre(eid, appid)
+		export port Port_t res()
+		export port Port_tv call(eid)
+
+		// state definition
+		place IDLE, BOUND, EXE, SUSP
+
+		// behavior definition
+		initial to IDLE
+
+		on init from IDLE to BOUND 
+		
+		on call from BOUND to EXE 
+		// set data to send
+
+		on pre from EXE to SUSP 
+		on res from SUSP to EXE 
+
+	end
+
 	// Command Handler is quite differnet from TH and EH, it will return a value indicates it succees or not
 	// no scheduler
 	atom type CommandHandler(int _cid, int _appid)
@@ -531,39 +698,34 @@ package sched
 			count_down = 0;
 		}
 	
-		on post from INIT to EXE 
-		provided (count_down == 0 && flag_is_posted == DISABLE && is_one_shot == DISABLE)
+		on post from INIT to EXE provided (count_down == 0 && flag_is_posted == DISABLE && is_one_shot == DISABLE)
 		do {
 			flag_is_posted = ENABLE;
 			count_down = expire_in;
 			printf("                [Timer] on post from INIT to EXE, new event set:%d, expire in:%d, timer ID: %d\n", t, expire_in, timer_id);
 		}
 
-		on interval from INIT to EXE
-		provided (count_down == 0 && flag_is_posted == ENABLE)
+		on interval from INIT to EXE provided (count_down == 0 && flag_is_posted == ENABLE)
 		do {
 			count_down = expire_in;
 			printf("                [Timer] on interval from INIT to EXE, new event set:%d, expire in:%d, timer ID: %d\n", t, expire_in, timer_id);
 		}
 
-		on tick from EXE to EXE
-		provided (count_down > 0)
+		on tick from EXE to EXE provided (count_down > 0)
 		do {
 			// todo: real time related?
 			printf("                [Timer] on tick from EXE to EXE, remain countdown %d/%d\n", count_down, expire_in);
 			count_down = count_down - 1;
 		}
 		
-		on sig from EXE to INIT
-		provided (count_down == 0 && is_one_shot == DISABLE)
+		on sig from EXE to INIT provided (count_down == 0 && is_one_shot == DISABLE)
 		do {
 			printf("                [Timer] on sig from EXE to INIT\n");
 			// start a interval 
 			count_down = 0;
 		}
 
-		on sig from EXE to DONE
-		provided (count_down == 0 && is_one_shot == ENABLE)
+		on sig from EXE to DONE provided (count_down == 0 && is_one_shot == ENABLE)
 		do {
 			printf("                [Timer] on sig from DONE to INIT\n");
 			// start a interval 
@@ -615,9 +777,11 @@ package sched
 		
 		on test from EXE2 to EXE2
 	end
+
+	
 	
 	// Boot sequence of TOS
-	atom type TOS_BOOT() 
+	atom type Node() 
 		export data int is_booted = DISABLE
 
 		export port Port_t sched_init()
@@ -682,15 +846,13 @@ package sched
 			printf("                [UA] APP %d begins running\n", appid);
 		}
 
-		on post from RUNNING to POSTING 
-		provided(posted_task_count < task_count)
+		on post from RUNNING to POSTING provided(posted_task_count < task_count)
 		do {
 			posted_task_count  = posted_task_count + 1;
 			printf("                [UA] APP %d posting a task\n", appid);	
 		}
 
-		on sig from RUNNING to RUNNING 
-		provided (signaled_count < signal_count) 
+		on sig from RUNNING to RUNNING provided (signaled_count < signal_count) 
 		do {
 			signaled_count = signaled_count + 1;
 			printf("                [UA] APP %d signal a event\n", appid);
@@ -700,8 +862,7 @@ package sched
 			printf("                [UA] APP %d continue to run\n", appid); 
 		}
 
-		on fin from RUNNING to FIN 
-		provided(posted_task_count == task_count && signaled_count == signal_count)
+		on fin from RUNNING to FIN provided(posted_task_count == task_count && signaled_count == signal_count)
 		do {
 			printf("                [UA] APP %d is done\n", appid);
 		}	
@@ -710,22 +871,30 @@ package sched
 
 	atom type RadioSender(int id)
 		// data definition
-		data string packet = " "
+		data int packet = 0
+		data int flag_send_enable = DISABLE
 		// port definition
 		export port Port_t sig()
 		export port Port_t broadcast()
 		export port Port_tr syn_send(packet)
+		export port Port_tv test(flag_send_enable)
+		
 		// place definition
 		place IDLE, SEND, FIN
 
 		// interaction definition
-		initial to IDLE
+		initial to IDLE do {flag_send_enable = ENABLE;}
 		
-		on syn_send from IDLE to SEND
+		on syn_send from IDLE to SEND do {flag_send_enable = DISABLE;}
 
 		on broadcast from SEND to FIN
 
 		on sig from FIN to IDLE
+		
+		on test from IDLE to IDLE
+		on test from SEND to SEND
+		on test from FIN to FIN
+		
 
 	end
 	
@@ -745,6 +914,31 @@ package sched
 
 		on sig from RECV to IDLE
 		
+	end
+
+	atom type LED()
+		data int led0 = 0
+		data int led1 = 0
+		data int led2 = 0
+		
+		export port Port_t led0on()
+		export port Port_t led1on()
+		export port Port_t led2on()
+
+		export port Port_t led0off()
+		export port Port_t led1off()
+		export port Port_t led2off()
+	
+		place SET
+
+		initial to SET
+		on led0on from SET to SET do {led0 = 1;}
+		on led1on from SET to SET do {led1 = 1;}
+		on led2on from SET to SET do {led2 = 1;}
+
+		on led0off from SET to SET do {led0 = 0;}
+		on led1off from SET to SET do {led1 = 0;}
+		on led2off from SET to SET do {led2 = 0;}
 	end
 
 	// for Sensor, it will provide a random value as the return of sensors
@@ -776,12 +970,11 @@ package sched
 				state = ENABLE;
 			fi
 		}
-	end
-
-	// main
-	compound  type  Compound() 
+	end	
+		
+	compound  type  SampleNode() 
 		// components
-		component TOS_BOOT tb()
+		component Node tb()
     		component TaskScheduler ts()
 		component EventScheduler es()
 
@@ -797,56 +990,266 @@ package sched
 		component Environment env() 
 
 		// System Boot
-		connector Conn2 scheduler_init(tb.sched_init, ts.init)
-		connector Conn2 interrupt_init (tb.enable_interrupt, es.init)
+		connector Conn2 scheduler_init(
+			tb.sched_init, 
+			ts.init
+		)
+		connector Conn2 interrupt_init (
+			tb.enable_interrupt, 
+			es.init
+		)
 		// booted application
-		connector Conn_Boot app_boot(tb.booted, app1.booted)
+		connector Conn_Boot app_boot(
+			tb.booted, 
+			app1.booted
+		)
 	
 		// connectors
 		// post task
-		connector Conn3_P post_task1(app1.post, ts.post, th_app1_1.init)
-		connector Conn3_P post_task2(app1.post, ts.post, th_app1_2.init)
+		connector Conn3_P post_task1(
+			app1.post, ts.post, 
+			th_app1_1.init
+		)
+		connector Conn3_P post_task2(
+			app1.post, ts.post, 
+			th_app1_2.init
+		)
 		// the link of tasksched and its handler: begin
-		connector Conn3 begin_task1(es.test, th_app1_1.beg, ts.beg)					
-		connector Conn3 begin_task2(es.test, th_app1_2.beg, ts.beg)
+		connector Conn3 begin_task1(
+			es.test, 
+			th_app1_1.beg, 
+			ts.beg
+		)					
+		connector Conn3 begin_task2(
+			es.test,				
+			th_app1_2.beg, 
+			ts.beg
+		)
 	
 		// the link of tasksched and its handler: finish
-		connector Conn2_Finish fin_task1(th_app1_1.fin, ts.fin)
-		connector Conn2_Finish fin_task2(th_app1_2.fin, ts.fin)	
+		connector Conn2_Finish fin_task1(
+			th_app1_1.fin, 
+			ts.fin
+		)
+		connector Conn2_Finish fin_task2(
+			th_app1_2.fin, 
+			ts.fin
+		)	
 		
 		// the following is for test: meet the basic demanding
-		connector Conn6_Preem test_pree1(es.pre, 
-							th_app1_1.pre, 
-							th_app1_2.pre, 
-							ch_sen1_get_data.pre, 
-							eh_sen1_data_ready.pre, 
-							eh_timer.pre)
+		connector Conn6_Preem test_pree1(
+			es.pre, 
+			th_app1_1.pre, 
+			th_app1_2.pre, 
+			ch_sen1_get_data.pre, 
+			eh_sen1_data_ready.pre, 
+			eh_timer.pre
+		)
 		
-		connector Conn2 test_res1(es.res, th_app1_1.res)
-		connector Conn2 test_res2(es.res, th_app1_2.res)
-		connector Conn2 test_res3(es.res, ch_sen1_get_data.res)
-		connector Conn2 test_res4(es.res, eh_sen1_data_ready.res)
-		connector Conn2 test_res5(es.res, eh_timer.res)
+		connector Conn2 test_res1(
+			es.res, 
+			th_app1_1.res
+		)
+		connector Conn2 test_res2(
+			es.res, 
+			th_app1_2.res
+		)
+		connector Conn2 test_res3(
+			es.res, 
+			ch_sen1_get_data.res
+		)
+		connector Conn2 test_res4(
+			es.res, 
+			eh_sen1_data_ready.res
+		)
+		connector Conn2 test_res5(
+			es.res, 
+			eh_timer.res
+		)
 
 		// Command handler :TempRead.read() == SUCCESS
-		connector Conn4_Sen_Begin sen_ch_beg(app1.sig, ch_sen1_get_data.beg, sen1.read, env.read)	
-		connector Conn2_V2  sen_repo(ch_sen1_get_data.fin, sen1.test)
+		connector Conn4_Sen_Begin sen_ch_beg(
+			app1.sig, 
+			ch_sen1_get_data.beg, 
+			sen1.read, 
+			env.read
+		)	
+		connector Conn2_V2  sen_repo(
+			ch_sen1_get_data.fin, 
+			sen1.test
+		)
 		
 		// Sensor sig, it will sig anytime
-		connector Conn4_S            sig_event1(sen1.sig, es.sig, eh_sen1_data_ready.init, ch_sen1_get_data.done)
-		connector Conn2                begin_event1(eh_sen1_data_ready.beg, es.beg)
-		connector Conn2_Finish_1  fin_event1(eh_sen1_data_ready.fin, es.fin)
+		connector Conn4_S sig_event1(
+			sen1.sig, 
+			es.sig, 
+			eh_sen1_data_ready.init, 
+			ch_sen1_get_data.done
+		)
+		connector Conn2 begin_event1(
+			eh_sen1_data_ready.beg, 
+			es.beg
+		)
+		connector Conn2_Finish_1  fin_event1(
+			eh_sen1_data_ready.fin, 
+			es.fin
+		)
 
 		// Timer sig, it will sig when expired1, it will signal a Periodic
-		connector Conn2                  set_timer1(app1.sig, timer1.post)
-		connector Conn3_Timer_Sig  sig_timer1(timer1.sig, es.sig, eh_timer.init)
-		connector Conn2                   beg_timer1(eh_timer.beg, es.beg)
-		connector Conn3_Finish         fin_timer1(eh_timer.fin, es.fin, timer1.interval)
+		connector Conn2 set_timer1(
+			app1.sig, 
+			timer1.post
+		)
+		connector Conn3_Timer_Sig sig_timer1(
+			timer1.sig, 
+			es.sig, 
+			eh_timer.init
+		)
+		connector Conn2 beg_timer1(
+			eh_timer.beg, 
+			es.beg
+		)
+		connector Conn3_Finish fin_timer1(
+			eh_timer.fin, 
+			es.fin, 
+			timer1.interval
+		)
 
 		// extern connector 
 		// make sure tick excute after ts and es is free
-		connector Conn2_V2 ts_es_free(ts.tick, es.test)
+		connector Conn2_V2 ts_es_free(
+			ts.tick, 
+			es.test
+		)
 		priority ts_tick_minimal1 ts_es_free: * < * : * provided (es.is_es_idle == 0)
-		// priority ts_tick_booted ts_es_free:ts.tick < app_boot:tb.booted provided(tb.is_booted == DISABLE)
+	end
+
+	compound type BasicMACM()
+		data int appid = 1
+		component Node tb()
+    		component TaskScheduler ts(0) // debug: ts disabled
+		component EventScheduler es()
+		component Timer timer1(6666, 1, 0) // debug: not use timer now
+		component SampleApplication app1(appid, 0, 1)
+		component Sensor sen1(456)	
+		component Environment env() 
+		component LED led()
+
+		// bussiness ch/eh/th
+		component EH_Timer eh_timer()
+		component CH_Photo_Read ch_photo_read(appid, 1000)
+		component EH_Photo_ReadDone eh_photo_readdone()
+		component CH_DataMsg_Send ch_datamsg_send()
+		component EH_DataMsg_SendDone eh_datamsg_senddone()
+		component EH_Recvmsg_Receive eh_recvmsg_receive()
+		
+		// radio
+		component RadioSender sender(0)
+		component RadioReceiver receiver(0)
+
+		// System Boot
+		connector Conn2 scheduler_init(
+			tb.sched_init, 
+			ts.init
+		)
+
+		connector Conn2 interrupt_init (
+			tb.enable_interrupt, 
+			es.init
+		)
+		// boot application
+		connector Conn_Boot app_boot(
+			tb.booted, 
+			app1.booted
+		)
+
+		connector Conn_Sen_Ch_Beg conn_sen_ch_beg(
+			app1.sig, 
+			ch_photo_read.beg,
+			led.led1on
+			sen1.read, 
+			env.read
+		)	
+		
+		connector Conn_Sig_Photo_Read conn_sig_photo_read(
+			sen1.sig, 
+			es.sig,
+			eh_photo_readdone.init,
+			ch_photo_read.sig
+		)
+
+		connector Conn_Photo_Read_Call1 conn_photo_read_call1(
+			eh_photo_readdone.call_send,
+			ch_datamsg_send.beg
+		)
+
+		connector Conn_Radio_Send conn_radio_send(
+			ch_datamsg_send.send
+			sender.syn_send
+		)
+
+		// provided: if snd succeed
+		connector Conn_Radio_SendDone conn_radio_senddone(
+			sender.test,
+			eh_photo_readdone.get_report
+		)
+
+		connector Conn_Photo_Read_Call2 conn_photo_read_call2(
+			es.fin,
+			eh_photo_readdone.call_led2,
+			led.led2on
+		)
+		
+		connector Conn_Data_Msg_SendDone conn_datamsg_senddone(
+			es.sig
+			eh_datamsg_senddone.init,
+			ch_datamsg_send.sig
+		) 
+
+		connector Conn_Data_Msg_SendDone_Call conn_datamsg_senddone_call(
+			es.fin
+			eh_datamsg_senddone.call,
+			led.led2off
+		)
+
+		connector Conn_Data_Receive conn_data_receive(
+			es.sig
+			receiver.listen,
+			eh_recvmsg_receive.init
+		)
+		
+		connector Conn_Recv_EH conn_recv_eh(
+			es.fin
+			eh_recvmsg_receive.call,
+			led.led0on
+		)		
+	end
+
+	connector type Conn_Sen_Ch_Beg (Port_t appsig, Port_t chbeg, Port_t led, Port_tvv senread, Port_tvv envread)
+		define appsig chbeg led senread envread
+		on appsig chbeg led senread envread
+		down {
+			senread.v1 = envread.v1;
+			senread.v2 = envread.v2;
+		}
+	end
+
+	connector type Conn_Sig_Photo_Read (Port_tv3 sensig, Port_v essig,  Port_tvv ehinit, Port_v chsig)
+		define sensig essig ehinit chsig
+		on sensig essig ehinit chsig
+		down {
+			ehinit.v1 = get_rand(255);
+			ehinit.v2 = sensig.v1;
+			ehinit.v3 = sensig.v2;
+		}
+	end
+	
+	connector type  Conn_Photo_Read_Call1(Port_t ehcs, Port_t chbeg)
+		define ehcs chbeg
+		on ehcs chbeg 
+	end
+
+	compound type Compund()	
+		component SampleNode snode() 	
 	end
 end
