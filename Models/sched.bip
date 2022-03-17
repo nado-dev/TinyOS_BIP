@@ -6,7 +6,13 @@ package sched
 	const data int MAX_TASK_EXECUTION_STEP = 5
 	const data int ENABLE = 1
 	const data int DISABLE = 0
+	const data int DEFAULT_SEQ = 100
+	const data int DEFAULT_TTL = 10
 
+	// transported msg
+	extern data message_t
+	extern function set_message_t(int, int, int, int, message_t)
+	extern function print_message_t(message_t)
 	// helper function definition
 	extern function printf(string)
 	extern function printf(string, int)
@@ -34,7 +40,8 @@ package sched
 	// Port dinfinition
 	port type Port_t()
 	port type Port_tv(int v)
-	port type Port_tr (string msg)
+	port type Port_tm(message_t msg)
+	port type Port_tvm(int v, message_t msg)
 	port type Port_tvv(int v1, int v2)
 	port type Port_tv3(int v1, int v2, int v3)
 	port type Port_tv4(int v1, int v2, int v3, int v4)
@@ -67,7 +74,6 @@ package sched
 	connector type Conn2_V2(Port_tv p1, Port_tv p2)
 		define p1 p2	// sen env
 		on p1 p2
-		provided (p2.v != UNDEFINED)
 		down {
 			p1.v = p2.v;
 		}
@@ -487,13 +493,16 @@ package sched
 		data int value = UNDEFINED
 		data int flag_last_estate = UNDEFINED
 		data int ret_callsend = UNDEFINED
+		data int flag_send = UNDEFINED
+		data message_t msg
 
 		// port definition 
 		export port Port_tv3 init(eid, result, value)
 		export port Port_t beg()
 		export port Port_tta pre(eid, appid)
 		export port Port_t res()
-		export port Port_t call_send()
+		export port Port_tm call_send(msg)
+		export port Port_tv get_report(flag_send)
 		export port Port_tv call_led2(ret_callsend)
 
 		// state definition
@@ -505,6 +514,7 @@ package sched
 		on init from IDLE to BOUND 
 		
 		on beg from BOUND to E1 provided (result == ENABLE)
+		do { set_message_t(DEFAULT_SEQ, DEFAULT_TTL, appid, value, msg);}
 		// set data to send
 
 		// send data
@@ -512,7 +522,7 @@ package sched
 
 		on get_report from E2 to E3
 
-		on call_led2 from E3 to IDLE provided()
+		on call_led2 from E3 to IDLE provided(flag_send == ENABLE)
 
 		on pre from E1 to SUSP do {flag_last_estate = 1;}
 		on pre from E2 to SUSP do {flag_last_estate = 2;}
@@ -521,20 +531,20 @@ package sched
 		on res from SUSP to E1 provided(flag_last_estate == 1)
 		on res from SUSP to E2 provided(flag_last_estate == 2)
 		on res from SUSP to E3 provided(flag_last_estate == 3)
-
 	end
 
 	atom type CH_DataMsg_Send(int cid, int appid)
 		// data definition
 		data int read_state = UNDEFINED
 		data int flag_last_e = UNDEFINED
-			
+		data message_t msg		
+
 		// port definition 
-		export port Port_t beg()
+		export port Port_tm beg(msg)
 		export port Port_tta pre(cid, appid)
 		export port Port_t res()
 		export port Port_t sig()
-		export port Port_t send()
+		export port Port_tm send(msg)
 		
 		// state definition
 		place IDLE, E1, E2, SUSP
@@ -552,15 +562,16 @@ package sched
 		on pre from E2 to SUSP do {flag_last_e = 2;}
 
 		on res from SUSP to E1 provided(flag_last_e == 1)  
-		on res from SUSP to E1 provided(flag_last_e == 2)  
+		on res from SUSP to E2 provided(flag_last_e == 2)  
 	end
 	
 	atom type EH_DataMsg_SendDone(int appid)
 		// data definition
 		data int eid = UNDEFINED	
-	
+		data int flag_error = UNDEFINED
+		
 		// port definition 
-		export port Port_tv init(eid)
+		export port Port_tv2 init(eid, flag_error)
 		export port Port_t beg()
 		export port Port_tta pre(eid, appid)
 		export port Port_t res()
@@ -574,7 +585,7 @@ package sched
 
 		on init from IDLE to BOUND 
 		
-		on beg from BOUND to EXE 
+		on beg from BOUND to EXE provided (flag_error == ENABLE)
 		// set data to send
 		on call from EXE to IDLE
  
@@ -586,11 +597,10 @@ package sched
 	atom type EH_Recvmsg_Receive(int appid)
 		// data definition
 		data int eid = UNDEFINED	
-		data int payload = UNDEFINED
-		data int len = UNDEFINED
+		data message_t payload
 
 		// port definition 
-		export port Port_tv3 init(eid, payload, len)
+		export port Port_tvm init(eid, payload)
 		export port Port_t beg()
 		export port Port_tta pre(eid, appid)
 		export port Port_t res()
@@ -604,7 +614,7 @@ package sched
 
 		on init from IDLE to BOUND 
 		
-		on call from BOUND to EXE 
+		on call from BOUND to EXE do { print_message_t(payload); }
 		// set data to send
 
 		on pre from EXE to SUSP 
@@ -788,9 +798,8 @@ package sched
 		}
 	end
 
-	// Demo Application. This application can post 2 tasks, set a peroid timer to signal event, and signal a sensor
+	// Demo Application
 	atom type SampleApplication(int _appid, int task_count, int signal_count)
-		
 		data int posted_task_count = 0
 		data int signaled_count = 0
 		data int appid = 0
@@ -800,10 +809,9 @@ package sched
 		export port Port_t sig()
 		export port Port_t booted()
 		port Port_t start()
-		port Port_t ret()
 		port Port_t fin()
 		
-		place BOOT, INIT, POSTING, RUNNING, FIN
+		place BOOT, INIT, RUNNING, FIN
 	
 		initial to BOOT
 
@@ -817,7 +825,7 @@ package sched
 			printf("                [UA] APP %d begins running\n", appid);
 		}
 
-		on post from RUNNING to POSTING provided(posted_task_count < task_count)
+		on post from RUNNING to RUNNING provided(posted_task_count < task_count)
 		do {
 			posted_task_count  = posted_task_count + 1;
 			printf("                [UA] APP %d posting a task\n", appid);	
@@ -827,10 +835,6 @@ package sched
 		do {
 			signaled_count = signaled_count + 1;
 			printf("                [UA] APP %d signal a event\n", appid);
-		}
-		
-		on ret from POSTING to RUNNING do {
-			printf("                [UA] APP %d continue to run\n", appid); 
 		}
 
 		on fin from RUNNING to FIN provided(posted_task_count == task_count && signaled_count == signal_count)
@@ -842,12 +846,14 @@ package sched
 
 	atom type RadioSender(int id)
 		// data definition
-		data int packet = 0
+		data message_t packet
 		data int flag_send_enable = DISABLE
+		data int flag_send_succeed = DISABLE // todo
+
 		// port definition
-		export port Port_t sig()
+		export port Port_tv sig(flag_send_succeed)
 		export port Port_t broadcast()
-		export port Port_tr syn_send(packet)
+		export port Port_tm syn_send(packet)
 		export port Port_tv test(flag_send_enable)
 		
 		// place definition
@@ -858,9 +864,9 @@ package sched
 		
 		on syn_send from IDLE to SEND do {flag_send_enable = DISABLE;}
 
-		on broadcast from SEND to FIN
+		on broadcast from SEND to FIN do {flag_send_enable = DISABLE;}
 
-		on sig from FIN to IDLE
+		on sig from FIN to IDLE do {flag_send_enable = ENABLE;}
 		
 		on test from IDLE to IDLE
 		on test from SEND to SEND
@@ -871,10 +877,10 @@ package sched
 	
 	atom type RadioReceiver(int id)
 		// data dedinition
-		data string packet = " "
+		data message_t packet
 		// port definition
-		export port Port_tr listen(packet)
-		export port Port_t  sig()
+		export port Port_tm listen(packet)
+		export port Port_t sig()
 		// place definition
 		place IDLE, RECV
 		
@@ -1102,7 +1108,7 @@ package sched
     		component TaskScheduler ts(0) // debug: ts disabled
 		component EventScheduler es()
 		component Timer timer1(6666, 1, 0) // debug: not use timer now
-		component SampleApplication app1(appid, 0, 1)
+		component SampleApplication app1(appid, 0, 1) // noting to post and signal once
 		component Sensor sen1(456)	
 		component Environment env() 
 		component LED led()
@@ -1155,22 +1161,21 @@ package sched
 			eh_photo_readdone.beg
 		)
 
-		connector Conn2 conn_photo_read_call1(
+		connector Conn2_M conn_photo_read_call(
 			eh_photo_readdone.call_send,
 			ch_datamsg_send.beg
 		)
 		
-		// todo
-		connector Conn_Radio_Send conn_radio_send(
+		connector Conn2_M conn_radio_send(
 			ch_datamsg_send.send,
 			sender.syn_send
 		)
 
-		// todo
 		// provided: if snd succeed
-		connector Conn_Radio_SendDone conn_radio_senddone(
+		connector Conn3_Radio_Senddone conn_radio_senddone(
+			eh_photo_readdone.get_report,
 			sender.test,
-			eh_photo_readdone.get_report
+			ch_datamsg_send.sig
 		)
 
 		connector Conn_Photo_Read_Call2 conn_photo_read_call2(
@@ -1179,11 +1184,10 @@ package sched
 			led.led2on
 		)
 		
-		//  todo
-		connector Conn_Data_Msg_SendDone conn_datamsg_senddone(
-			es.sig,
+		connector Conn3_Datamsg_Senddone conn_datamsg_senddone(	
 			eh_datamsg_senddone.init,
-			ch_datamsg_send.sig
+			sender.sig
+			es.sig
 		) 
 
 		connector Conn2 conn_eh_beg2(
@@ -1196,7 +1200,6 @@ package sched
 			eh_datamsg_senddone.call,
 			led.led2off
 		)
-
 
 		// msg receiver todo
 		connector Conn_Data_Receive conn_data_receive(
@@ -1262,6 +1265,15 @@ package sched
 		}
 	end
 
+	connector type Conn3_Datamsg_Senddone(Port_t essig, Port_tv2 ehinit, Port_tv sndsig)
+		define essig ehinit sndsig
+		on essig ehinit sndsig
+		down {
+			ehinit.v1 = get_rand(255);
+			ehinit.v2 = sndsig.v;
+		}
+	end
+
 	connector type Conn_Sig_Photo_Read (Port_tv3 sensig, Port_t essig,  Port_tvv ehinit, Port_t chsig)
 		define sensig essig ehinit chsig
 		on sensig essig ehinit chsig
@@ -1270,6 +1282,28 @@ package sched
 			ehinit.v2 = sensig.v1;
 			ehinit.v3 = sensig.v2;
 		}
+	end
+
+	connector type Conn_Data_Receive(Port_t essig, Port_tm rcvlis, Port_tvm ehinit)
+		define essig rcvlis ehinit
+		on essig rcvlis ehinit
+		down {
+			ehinit.v = get_rand(255);
+			ehinit.msg = rcvlis.msg;
+		}
+	end
+
+	connector type Conn3_Radio_Senddone(Port_tv p1, Port_tv p2, Port p3)
+		define p1 p2 p3
+		on p1 p2 p3
+		down { p1.v = p2.v; }
+	end
+
+	// pass p1's value(message_t) to p2
+	connector type Conn2_M(Port_tm p1, Port tm p2)
+		define p1 p2
+		on p1 p2
+		down { p2.msg = p1.msg; }
 	end
 	
 	compound type Compund()	

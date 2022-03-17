@@ -85,5 +85,18 @@ void print_s(string cmp_name)
 }
 
 
+// setter
+void set_message_t(int seq, int ttl, int sndid, int _data, message_t &adata) {
+    adata.seq = seq;
+    adata.TTL = ttl;
+    adata.SenderID = sndid;
+    adata.data0 = _data;
+}
+
+void print_message_t(message &adata) {
+    cout << "[message_t] seq: " << adata.seq << ", TTL:" <<  adata.TTL << ", SenderID:" << adata.SenderID << ", data0:" << adata.data0 << std::endl;
+}
+
+
 
 	

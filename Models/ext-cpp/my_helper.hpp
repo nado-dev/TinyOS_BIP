@@ -6,6 +6,18 @@
 
 using namespace std;
 
+typedef struct{
+    int seq;
+    int TTL;
+    int SenderID;
+    int data0;
+} message_t;
+
+// setter
+void set_message_t(int seq, int ttl, int sndid, int _data, message_t &adata);
+
+void print_message_t(message_t &adata);
+
 /**
 random num gen
 */
