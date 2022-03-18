@@ -852,7 +852,7 @@ package sched
 
 		// port definition
 		export port Port_tv sig(flag_send_succeed)
-		export port Port_t broadcast()
+		export port Port_tm broadcast(packet)
 		export port Port_tm syn_send(packet)
 		export port Port_tv test(flag_send_enable)
 		
@@ -879,17 +879,20 @@ package sched
 		// data dedinition
 		data message_t packet
 		// port definition
-		export port Port_tm listen(packet)
+		export port Port_tm listen1(packet)
+		export port Port_tm listen2(packet)
 		export port Port_t sig()
 		// place definition
-		place IDLE, RECV
+		place IDLE, RECV1, RECV2
 		
 		// interaction definition
 		initial to IDLE
 
-		on listen from IDLE to RECV
+		on listen1 from IDLE to RECV1
 
-		on sig from RECV to IDLE
+		on listen2 from RECV1 to RECV2
+
+		on sig from RECV2 to IDLE
 		
 	end
 
@@ -948,6 +951,24 @@ package sched
 			fi
 		}
 	end	
+
+	atom type Channel(int rate)
+
+		data int is_channel_busy = UNDEFINED
+		data int succ_rate
+		
+		export port Port_tv send(succ_rate)
+		port Port_t done()
+		
+		place IDLE, BUSY
+
+		initial to IDLE do { is_channel_busy = ENABLE; succ_rate = rate; }
+
+		on send from IDLE to BUSY  provided (s_channel_busy == ENABLE) do { is_channel_busy = DISABLE; }
+
+		on done from BUSY to IDLE provided (s_channel_busy == DISABLE) do { is_channel_busy = ENABLE; }
+	
+	end
 		
 	compound  type  SampleNode() 
 		// components
@@ -1125,6 +1146,9 @@ package sched
 		component RadioSender sender(0)
 		component RadioReceiver receiver(0)
 
+		export port sender.broadcast as broadcast
+		export port receiver.listen1 as listen
+
 		// System Boot
 		connector Conn2 scheduler_init(
 			tb.sched_init, 
@@ -1178,7 +1202,7 @@ package sched
 			ch_datamsg_send.sig
 		)
 
-		connector Conn_Photo_Read_Call2 conn_photo_read_call2(
+		connector Conn3_Basic conn_photo_read_call2(
 			es.fin,
 			eh_photo_readdone.call_led2,
 			led.led2on
@@ -1186,7 +1210,7 @@ package sched
 		
 		connector Conn3_Datamsg_Senddone conn_datamsg_senddone(	
 			eh_datamsg_senddone.init,
-			sender.sig
+			sender.sig,
 			es.sig
 		) 
 
@@ -1204,7 +1228,7 @@ package sched
 		// msg receiver todo
 		connector Conn_Data_Receive conn_data_receive(
 			es.sig,
-			receiver.listen,
+			receiver.listen2,
 			eh_recvmsg_receive.init
 		)
 		
@@ -1305,8 +1329,33 @@ package sched
 		on p1 p2
 		down { p2.msg = p1.msg; }
 	end
+
+	connector type Conn_CSMACA(Port_tm snd, Port_t chan, Port_tm rcv) 
+		define snd chan rcv
+		on snd chan rcv
+		provided (get_rand(100) < chan.v) // success rate
+		down { rcv.msg = snd.rcv; }
+	end  
 	
 	compound type Compund()	
-		component SampleNode snode() 	
+		// component SampleNode snode() 
+		component BasicMACM node1(1111)
+		component BasicMACM node2(2222)
+		component Channel chan(80)	
+
+		// node1 to node2
+		connector Conn_CSMACA conn_csma_n1_n2 (
+			node1.broadcast,
+			chan.send,
+			node2.listen
+		)
+
+		// node2 to node1
+		connector Conn_CSMACA conn_csma_n2_n1 (
+			node2.broadcast,
+			chan.send,
+			node1.listen
+		)
+		
 	end
 end
