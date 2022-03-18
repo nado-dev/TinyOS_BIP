@@ -1,10 +1,5 @@
-#include <assert.h>
-#include <malloc.h>
-#include <iostream>
-#include <stdlib.h>
-#include <string>
-
-using namespace std;
+#ifndef _MyHelper
+#define _MyHelper
 
 typedef struct{
     int seq;
@@ -50,4 +45,5 @@ other
 */
 void print_s(string cmp_name);
 
+#endif
 

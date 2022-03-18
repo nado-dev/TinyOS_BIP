@@ -1,8 +1,15 @@
+#include <assert.h>
+#include <malloc.h>
+#include <iostream>
+#include <stdlib.h>
+#include <string>
 #include "my_helper.hpp"
 
 static int *stack;
 static int stack_size;
 static int top_element = -1;
+
+using namespace std
 
 /**
 random num gen
@@ -94,6 +101,9 @@ void set_message_t(int seq, int ttl, int sndid, int _data, message_t &adata) {
 }
 
 void print_message_t(message &adata) {
+    if (!adata) {
+        cout << "[message_t] _data is empty!" <<  std::endl;
+    }
     cout << "[message_t] seq: " << adata.seq << ", TTL:" <<  adata.TTL << ", SenderID:" << adata.SenderID << ", data0:" << adata.data0 << std::endl;
 }
 

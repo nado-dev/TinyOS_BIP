@@ -1,8 +1,6 @@
 #ifndef _SchedulerBasic
 #define _SchedulerBasic
 
-#include <string.h>
-#include <stdio.h>
 /**
  * SchedulerBasicP implements the default TinyOS scheduler sequence, as
  * documented in TEP 106.

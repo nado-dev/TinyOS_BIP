@@ -1,3 +1,6 @@
+#ifndef _TraceHelper
+#define _TraceHelper
+
 #include<iostream>
 using namespace std;
 
@@ -11,3 +14,4 @@ void trace_d(string, double);
 
 void trace_b(string, bool);
 
+#endif

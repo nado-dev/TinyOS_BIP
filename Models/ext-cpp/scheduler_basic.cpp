@@ -1,3 +1,5 @@
+#include <string.h>
+#include <stdio.h>
 #include "scheduler_basic.hpp"
 // Helper functions (internal functions) intentionally do not have atomic
 // sections.  It is left as the duty of the exported interface functions to
