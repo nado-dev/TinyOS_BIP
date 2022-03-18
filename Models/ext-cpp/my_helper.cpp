@@ -9,7 +9,7 @@ static int *stack;
 static int stack_size;
 static int top_element = -1;
 
-using namespace std
+using namespace std;
 
 /**
 random num gen
@@ -82,29 +82,13 @@ int get_size() {
     return top_element + 1;
 }
 
-/**
-other
-*/
-
-void print_s(string cmp_name)
-{
-  cout << cmp_name;
-}
-
-
 // setter
-void set_message_t(int seq, int ttl, int sndid, int _data, message_t &adata) {
-    adata.seq = seq;
-    adata.TTL = ttl;
-    adata.SenderID = sndid;
-    adata.data0 = _data;
+void set_message_t(int _data, message_t adata) {
+    adata = _data;
 }
 
-void print_message_t(message &adata) {
-    if (!adata) {
-        cout << "[message_t] _data is empty!" <<  std::endl;
-    }
-    cout << "[message_t] seq: " << adata.seq << ", TTL:" <<  adata.TTL << ", SenderID:" << adata.SenderID << ", data0:" << adata.data0 << std::endl;
+void print_message_t(message_t adata) {
+    cout << "[message_t] _data: " << adata << std::endl;
 }
 
 

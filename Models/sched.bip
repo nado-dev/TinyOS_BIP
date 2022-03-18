@@ -12,7 +12,7 @@ package sched
 
 	// transported msg
 	extern data type message_t
-	extern function set_message_t(int, int, int, int, message_t)
+	extern function set_message_t(int, message_t)
 	extern function print_message_t(message_t)
 	// helper function definition
 	extern function printf(string)
@@ -574,14 +574,14 @@ package sched
 		initial to IDLE do { 
 			appid = _appid; 
 			// initialize message
-			set_message_t(-1, -1, -1, -1,  msg);
+			set_message_t(-1,  msg);
 		}
 
 		on init from IDLE to BOUND 
 		
 		on beg from BOUND to E1 provided (result == ENABLE)
 		do { 
-			set_message_t(100, 10, appid, value, msg);
+			set_message_t(value, msg);
 			print_message_t(msg);
 		}
 		// set data to send

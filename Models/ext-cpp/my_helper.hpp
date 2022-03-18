@@ -1,17 +1,12 @@
 #ifndef _MyHelper
 #define _MyHelper
 
-typedef struct{
-    int seq;
-    int TTL;
-    int SenderID;
-    int data0;
-} message_t;
+typedef int message_t;
 
 // setter
-void set_message_t(int seq, int ttl, int sndid, int _data, message_t &adata);
+void set_message_t(int _data, message_t adata);
 
-void print_message_t(message_t &adata);
+void print_message_t(message_t adata);
 
 /**
 random num gen
@@ -39,11 +34,6 @@ int get_size();
 void create_stack(int size);
 
 void destroy_stack(void);
-
-/**
-other
-*/
-void print_s(string cmp_name);
 
 #endif
 
