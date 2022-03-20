@@ -7,34 +7,31 @@ package sched
 	const data int UNDEFINED = -1
 	const data int ENABLE = 1
 	const data int DISABLE = 0
-	const data int DEFAULT_SEQ = 100
-	const data int DEFAULT_TTL = 10
 
 	// transported msg
 	extern data type message_t
-	extern function set_message_t(int, int, int, int, message_t)
+	extern function set_message_t(int, message_t)
 	extern function print_message_t(message_t)
 	// helper function definition
 	extern function printf(string)
 	extern function printf(string, int)
 	extern function printf(string, int, int)
-	extern function printf(string, string, int)
 	extern function printf(string, int, int, int)
 	// to get unique tID/eID
 	extern function int get_rand(int)
 	extern function init_seed()
 	// task queue in ScheulerBasicP.nc
-	extern function scheuler_init()
-	extern function int push_task(int id)
-	extern function int pop_task()
-	extern function int get_task_count()
+	extern function scheuler_init(int)
+	extern function int push_task(int, int)
+	extern function int pop_task(int)
+	extern function int get_task_count(int)
 	// event stack 
-	extern function push(int)
-	extern function int pop()
-	extern function bool stack_is_empty()
-	extern function bool is_full()
-	extern function int get_size()
-	extern function create_stack(int)
+	extern function push(int, int)
+	extern function int pop(int)
+	extern function bool stack_is_empty(int)
+	extern function bool is_full(int)
+	extern function int get_size(int)
+	extern function create_stack(int, int)
 	// trace
 	extern function trace_i(string, int)
 	
@@ -62,22 +59,20 @@ package sched
 		define p1 p2 p3
 	end
 	
-	connector type Conn4_Sen_Begin (Port_t a_s, Port_t c_b, Port_tvv s_r, Port_tvv e_r)
-		define a_s c_b s_r e_r
-		on a_s c_b s_r e_r
-		provided (e_r.v1 != UNDEFINED && e_r.v2 != UNDEFINED)
+	connector type Conn4_Sen_Begin (Port_t appsig, Port_t combeg, Port_tvv s_r, Port_tvv envread)
+		define appsig combeg s_r envread
+		on appsig combeg s_r envread
+		provided (envread.v1 != UNDEFINED && envread.v2 != UNDEFINED)
 		down {
-			s_r.v1 = e_r.v1;
-			s_r.v2 = e_r.v2;
+			s_r.v1 = envread.v1;
+			s_r.v2 = envread.v2;
 		}
 	end
 
 	connector type Conn2_V2(Port_tv p1, Port_tv p2)
 		define p1 p2	// sen env
 		on p1 p2
-		down {
-			p1.v = p2.v;
-		}
+		down { p1.v = p2.v; }
 	end
 
 	// for task to finish
@@ -91,10 +86,6 @@ package sched
 		define p1 p2	
 	end
 
-	connector type Conn_Boot(Port_t tb, Port_t p1)
-		define tb p1
-	end
-
 	// test: for 4-TH/CH only , act like a boradcast
 	connector type Conn6_Preem(Port_t es, Port_tta p1, Port_tta p2, Port_tta p3, Port_tta p4, Port_tta p5)
 		define es' p1 p2 p3 p4 p5
@@ -102,23 +93,23 @@ package sched
 			printf("                [Conn4_Preem] no task is preemted, go on \n");
 		}
 		on es  p1                  down {
-			push(p1.tid);
+			push(p1.appid, p1.tid);
 			printf("                [Conn4_Preem] preempted tasks is stacked, %d\n", p1.tid);
 		}
 		on es     p2               down {
-			push(p2.tid);
+			push(p2.appid, p2.tid);
 			printf("                [Conn4_Preem] preempted tasks is stacked, %d\n", p2.tid);
 		}
 		on es           p3         down {
-			push(p3.tid);
+			push(p3.appid, p3.tid);
 			printf("                [Conn4_Preem] preempted tasks is stacked, %d\n", p3.tid);
 		}
 		on es               p4     down {
-			push(p4.tid);
+			push(p4.appid, p4.tid);
 			printf("                [Conn4_Preem] preempted tasks is stacked, %d\n", p4.tid);
 		}
 		on es                   p5 down {
-			push(p5.tid);
+			push(p5.appid, p5.tid);
 			printf("                [Conn4_Preem] preempted tasks is stacked, %d\n", p5.tid);
 		}
 	end
@@ -223,7 +214,7 @@ package sched
 	end  
 
 	// atom: Model of Task Schduler
-	atom type TaskScheduler(int enable)
+	atom type TaskScheduler(int did, int enable)
    		 // variable definition
     		data int task_count = 0
 		data int ptv = UNDEFINED
@@ -247,25 +238,25 @@ package sched
 		
 		on init from BOOT to FREE do {
 			// initial of task queue
-			scheuler_init(); 
+			scheuler_init(did); 
 		}
 
    		on beg from FREE to BUSY provided (task_count != 0 && flag_is_running == DISABLE && enable == ENABLE)	
  		do {	
 			flag_is_running = ENABLE;
-			pop_task();
-			task_count = get_task_count();
+			pop_task(did);
+			task_count = get_task_count(did);
 			printf("                [TS] on beg from FREE to BUSY tc:%d\n", task_count);
 		}
 
     		on post from FREE to FREE provided (task_count < TASK_BUFFER_LIMIT && enable == ENABLE)
 		do{
-			temp = push_task(tid);
+			temp = push_task(did, tid);
 			// add to queue
 			if (tid != UNDEFINED && temp == ENABLE) 
 			then 
-				task_count = get_task_count();
-				printf("                [TS] on post from FREE to FREE, new tid:------%d, tc:%d\n", tid, task_count);
+				task_count = get_task_count(did);
+				printf("                [TS] on post from FREE to FREE, new tid: %d, tc:%d\n", tid, task_count);
 			else 
 				printf("                [USER_DEFINE_ERROR] push failed: %d, errno: %d\n", tid, temp);
 			fi
@@ -274,11 +265,11 @@ package sched
 
     		on post from BUSY to BUSY provided (task_count < TASK_BUFFER_LIMIT)
 		do{
-			temp = push_task(tid);
+			temp = push_task(did, tid);
 			// add to queue
 			if (tid != UNDEFINED && temp == ENABLE) 
 			then 
-				task_count = get_task_count();
+				task_count = get_task_count(did);
 				printf("                [TS] on post from BUSY to BUSY tc:%d\n", task_count);
 			else 
 				printf("                [USER_DEFINE_ERROR] push failed: %d, errno: %d\n", tid, temp);
@@ -288,12 +279,12 @@ package sched
 
     		on fin from BUSY to FREE do {
 			flag_is_running = DISABLE;
-			ptv = pop_task();
+			ptv = pop_task(did);
 			if(ptv == NO_TASK) 
 			then 
 				printf("                [USER_DEFINE_ERROR] pop failed, NO_TASK\n");
 			else 
-				task_count = get_task_count();
+				task_count = get_task_count(did);
 				printf("                [TS]popped task tid %d\n", ptv);
 			fi
 			printf("                [TS] on fin from BUSY to FREE do tc:%d\n", task_count);
@@ -306,7 +297,7 @@ package sched
 	end
 
 	// the Atom Component of Event Scheduler
-	atom type EventScheduler()
+	atom type EventScheduler(int did)
 		// variable difination
 		data int e_count = 0
 		data int stack_size = 0
@@ -330,7 +321,7 @@ package sched
 		initial to INIT
 
 		on init from INIT to IDLE do {
-			create_stack(255);
+			create_stack(did, 255);
 			is_es_idle = ENABLE;
 			e_count = 0;
 			stack_size = 0;
@@ -346,7 +337,7 @@ package sched
 		} 
 
 		on pre from ACCEPT to PREEMPT do {
-			stack_size = get_size();
+			stack_size = get_size(did);
 			printf("                [ES] on pre from ACCEPT to PREEMPT, ec: %d, ss: %d\n", e_count, stack_size);
 		}
 
@@ -363,8 +354,8 @@ package sched
 		
 		on fin from BUSY1 to BUSY2 provided(stack_size != 0)
 		do {
-			popped_id = pop(); 	// pop from stack
-			stack_size = get_size();
+			popped_id = pop(did); 	// pop from stack
+			stack_size = get_size(did);
 			e_count = e_count - 1;
 			printf("                [ES] on fin from BUSY1 to BUSY2, ec: %d, ss: %d,  popped id: %d\n", e_count, stack_size, popped_id);
 		}
@@ -574,14 +565,14 @@ package sched
 		initial to IDLE do { 
 			appid = _appid; 
 			// initialize message
-			set_message_t(-1, -1, -1, -1,  msg);
+			set_message_t(-1,  msg);
 		}
 
 		on init from IDLE to BOUND 
 		
 		on beg from BOUND to E1 provided (result == ENABLE)
 		do { 
-			set_message_t(100, 10, appid, value, msg);
+			set_message_t(value, msg);
 			print_message_t(msg);
 		}
 		// set data to send
@@ -840,7 +831,7 @@ package sched
 	end
 
 	// Boot sequence of TOS
-	atom type Node() 
+	atom type NodeBoot() 
 		export port Port_t sched_init()
 		port Port_t platform_init()
 		export port Port_t enable_interrupt()
@@ -1047,9 +1038,9 @@ package sched
 		
 	compound type SampleNode() 
 		// components
-		component Node tb()
-    		component TaskScheduler ts(1)
-		component EventScheduler es()
+		component NodeBoot tb()
+    		component TaskScheduler ts(8888, 1)
+		component EventScheduler es(8888)
 
 		// component Timer timer1(111)
 		component Sensor sen1(456)	
@@ -1200,9 +1191,9 @@ package sched
 	end
 
 	compound type BasicMACM (int appid)
-		component Node tb()
-    		component TaskScheduler ts(0) // debug: ts disabled
-		component EventScheduler es()
+		component NodeBoot tb()
+    		component TaskScheduler ts(appid ,0) // debug: ts disabled
+		component EventScheduler es(appid)
 		component Timer timer1(6666, 1, 0) // debug: not use timer now
 		component SampleApplication app1(appid, 0, 1) // noting to post and signal once
 		component Sensor sen1(456)	
@@ -1211,9 +1202,9 @@ package sched
 
 		// bussiness ch/eh/th
 		// component EH_Timer eh_timer()
-		component CH_Photo_Read ch_photo_read(appid, 1000)
+		component CH_Photo_Read ch_photo_read(1000, appid)
 		component EH_Photo_ReadDone eh_photo_readdone(appid)
-		component CH_DataMsg_Send ch_datamsg_send(appid, 1001)
+		component CH_DataMsg_Send ch_datamsg_send(1001, appid)
 		component EH_DataMsg_SendDone eh_datamsg_senddone(appid)
 		component EH_Recvmsg_Receive eh_recvmsg_receive(appid)
 		
