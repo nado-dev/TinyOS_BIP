@@ -19,21 +19,21 @@ void init_seed();
 stack helper
 */
 
-void push(int value);
+void push(int appid,int value);
 
-int pop(void);
+int pop(int appid);
 
-int top(void);
+int top(int appid);
 
-bool stack_is_empty(void);
+bool stack_is_empty(int appid);
 
-bool is_full(void);
+bool is_full(int appid);
 
-int get_size();
+int get_size(int appid);
 
-void create_stack(int size);
+void create_stack(int appid, int size);
 
-void destroy_stack(void);
+void destroy_stack(int appid);
 
 #endif
 

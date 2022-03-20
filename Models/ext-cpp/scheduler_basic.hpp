@@ -12,27 +12,26 @@
  * This is a C language of SchedulerBasicP.nc, translated by FangWenyu
  */
 
+int pop_task(int appid);
 
-int pop_task();
+int is_waiting(int appid, int id);
 
-int is_waiting(int id);
+int push_task(int appid, int id);
 
-int push_task(int id);
+void scheuler_init(int appid);
 
-void scheuler_init();
+int scheduler_run_next_task(int appid);
 
-int scheduler_run_next_task();
+void scheduler_task_loop(int appid);
 
-void scheduler_task_loop();
+int task_basic_postTask(int appid, int id);
 
-int task_basic_postTask(int id);
+void task_basic_runTask(int appid, int id);
 
-void task_basic_runTask(int id);
+void helper_print_state(int appid);
 
-void helper_print_state();
+void print_arr(int appid);
 
-void print_arr();
-
-int get_task_count();
+int get_task_count(int appid);
 
 #endif
