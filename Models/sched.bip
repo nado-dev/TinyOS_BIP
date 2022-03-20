@@ -7,8 +7,6 @@ package sched
 	const data int UNDEFINED = -1
 	const data int ENABLE = 1
 	const data int DISABLE = 0
-	const data int DEFAULT_SEQ = 100
-	const data int DEFAULT_TTL = 10
 
 	// transported msg
 	extern data type message_t
@@ -18,7 +16,6 @@ package sched
 	extern function printf(string)
 	extern function printf(string, int)
 	extern function printf(string, int, int)
-	extern function printf(string, string, int)
 	extern function printf(string, int, int, int)
 	// to get unique tID/eID
 	extern function int get_rand(int)
@@ -62,22 +59,20 @@ package sched
 		define p1 p2 p3
 	end
 	
-	connector type Conn4_Sen_Begin (Port_t a_s, Port_t c_b, Port_tvv s_r, Port_tvv e_r)
-		define a_s c_b s_r e_r
-		on a_s c_b s_r e_r
-		provided (e_r.v1 != UNDEFINED && e_r.v2 != UNDEFINED)
+	connector type Conn4_Sen_Begin (Port_t appsig, Port_t combeg, Port_tvv s_r, Port_tvv envread)
+		define appsig combeg s_r envread
+		on appsig combeg s_r envread
+		provided (envread.v1 != UNDEFINED && envread.v2 != UNDEFINED)
 		down {
-			s_r.v1 = e_r.v1;
-			s_r.v2 = e_r.v2;
+			s_r.v1 = envread.v1;
+			s_r.v2 = envread.v2;
 		}
 	end
 
 	connector type Conn2_V2(Port_tv p1, Port_tv p2)
 		define p1 p2	// sen env
 		on p1 p2
-		down {
-			p1.v = p2.v;
-		}
+		down { p1.v = p2.v; }
 	end
 
 	// for task to finish
@@ -89,10 +84,6 @@ package sched
 	
 	connector type Conn2_Finish_1(Port_tv p1, Port_t p2)
 		define p1 p2	
-	end
-
-	connector type Conn_Boot(Port_t tb, Port_t p1)
-		define tb p1
 	end
 
 	// test: for 4-TH/CH only , act like a boradcast
@@ -265,7 +256,7 @@ package sched
 			if (tid != UNDEFINED && temp == ENABLE) 
 			then 
 				task_count = get_task_count();
-				printf("                [TS] on post from FREE to FREE, new tid:------%d, tc:%d\n", tid, task_count);
+				printf("                [TS] on post from FREE to FREE, new tid: %d, tc:%d\n", tid, task_count);
 			else 
 				printf("                [USER_DEFINE_ERROR] push failed: %d, errno: %d\n", tid, temp);
 			fi
@@ -840,7 +831,7 @@ package sched
 	end
 
 	// Boot sequence of TOS
-	atom type Node() 
+	atom type NodeBoot() 
 		export port Port_t sched_init()
 		port Port_t platform_init()
 		export port Port_t enable_interrupt()
@@ -1047,7 +1038,7 @@ package sched
 		
 	compound type SampleNode() 
 		// components
-		component Node tb()
+		component NodeBoot tb()
     		component TaskScheduler ts(1)
 		component EventScheduler es()
 
@@ -1200,7 +1191,7 @@ package sched
 	end
 
 	compound type BasicMACM (int appid)
-		component Node tb()
+		component NodeBoot tb()
     		component TaskScheduler ts(0) // debug: ts disabled
 		component EventScheduler es()
 		component Timer timer1(6666, 1, 0) // debug: not use timer now
