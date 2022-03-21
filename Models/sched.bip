@@ -836,7 +836,7 @@ package sched
 	end
 
 	// Boot sequence of TOS
-	atom type NodeBoot() 
+	atom type NodeBoot(int appid) 
 		export port Port_t sched_init()
 		port Port_t platform_init()
 		export port Port_t enable_interrupt()
@@ -849,23 +849,23 @@ package sched
 		initial to NE
 
 		on sched_init from NE to SI do {
-			printf("                [TOS_BOOT] 1. scheduler init\n");
+			printf("                [TOS_BOOT] from node %d, 1. scheduler init\n", appid);
 		}
 
 		on platform_init from SI to PI do {
-			printf("                [TOS_BOOT] 2. platform init\n");
+			printf("                [TOS_BOOT] from node %d 2. platform init\n", appid);
 		}
 
 		on enable_interrupt from PI to IE do {
-			printf("                [TOS_BOOT] 3. enable interrupt\n");
+			printf("                [TOS_BOOT] from node %d 3. enable interrupt\n", appid);
 		}
 
 		on booted from IE to BO do {
-			printf("                [TOS_BOOT] 4. booted\n");
+			printf("                [TOS_BOOT] from node %d 4. booted\n", appid);
 		}
 
 		on task_loop from BO to SC do {
-			printf("                [TOS_BOOT] 5. task loop begin\n");
+			printf("                [TOS_BOOT] from node %d 5. task loop begin\n", appid);
 		}
 	end
 
@@ -942,7 +942,6 @@ package sched
 		on test from IDLE to IDLE
 		on test from SEND to SEND
 		on test from FIN to FIN
-		
 
 	end
 	
@@ -950,24 +949,22 @@ package sched
 		// data dedinition
 		data message_t packet
 		// port definition
-		export port Port_tm listen1(packet)
-		export port Port_tm listen2(packet)
-		export port Port_t sig()
+		export port Port_tm listen(packet)
+		export port Port_tm sig(packet)
+
 		// place definition
-		place IDLE, RECV1, RECV2
+		place IDLE, RECV
 		
 		// interaction definition
 		initial to IDLE
 
-		on listen1 from IDLE to RECV1
+		on listen from IDLE to RECV
 
-		on listen2 from RECV1 to RECV2
+		on sig from RECV to IDLE
 
-		on sig from RECV2 to IDLE
-		
 	end
 
-	atom type LED()
+	atom type LED(int appid)
 		data int led0 = 0
 		data int led1 = 0
 		data int led2 = 0
@@ -1043,7 +1040,7 @@ package sched
 		
 	compound type SampleNode() 
 		// components
-		component NodeBoot tb()
+		component NodeBoot tb(8888)
     		component TaskScheduler ts(8888, 1)
 		component EventScheduler es(8888)
 
@@ -1196,14 +1193,14 @@ package sched
 	end
 
 	compound type BasicMACM (int appid)
-		component NodeBoot tb()
+		component NodeBoot tb(appid)
     		component TaskScheduler ts(appid ,0) // debug: ts disabled
 		component EventScheduler es(appid)
-		component Timer timer1(6666, 1, 0) // debug: not use timer now
+		component Timer timer1(appid, 1, 0) // debug: not use timer now
 		component SampleApplication app1(appid, 0, 1) // noting to post and signal once
-		component Sensor sen1(456)	
+		component Sensor sen1(appid)	
 		component Environment env() 
-		component LED led()
+		component LED led(appid)
 
 		// bussiness ch/eh/th
 		// component EH_Timer eh_timer()
@@ -1214,8 +1211,8 @@ package sched
 		component EH_Recvmsg_Receive eh_recvmsg_receive(appid)
 		
 		// radio
-		component RadioSender sender(0)
-		component RadioReceiver receiver(0)
+		component RadioSender sender(appid)
+		component RadioReceiver receiver(appid)
 
 		// System Boot
 		connector Conn2 scheduler_init(
@@ -1296,7 +1293,7 @@ package sched
 		// msg receiver todo
 		connector Conn_Data_Receive conn_data_receive(
 			es.sig,
-			receiver.listen2,
+			receiver.sig,
 			eh_recvmsg_receive.init
 		)
 		
@@ -1347,8 +1344,18 @@ package sched
 			eh_recvmsg_receive.res
 		)
 
+		// extern connector 
+		// make sure tick excute after ts and es is free
+		connector Conn2_V2 ts_es_free(
+			ts.tick, 
+			es.test
+		)
+
+		priority ts_tick_minimal1 ts_es_free: * < * : * provided (es.is_es_idle == 0)	
+
 		export port sender.broadcast as broadcast
-		export port receiver.listen1 as listen	
+		export port receiver.listen as listen
+		
 	end
 	
 	compound type Compound()	
