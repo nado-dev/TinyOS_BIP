@@ -236,10 +236,8 @@ package sched
 
 		initial to BOOT
 		
-		on init from BOOT to FREE do {
-			// initial of task queue
-			scheuler_init(did); 
-		}
+  		// initial of task queue
+		on init from BOOT to FREE do { scheuler_init(did);}
 
    		on beg from FREE to BUSY provided (task_count != 0 && flag_is_running == DISABLE && enable == ENABLE)	
  		do {	
@@ -299,11 +297,11 @@ package sched
 	// the Atom Component of Event Scheduler
 	atom type EventScheduler(int did)
 		// variable difination
-		data int e_count = 0
-		data int stack_size = 0
+		data int e_count = UNDEFINED
+		data int stack_size = UNDEFINED
 		export data int is_es_idle = DISABLE
-		data int eid = 0
-		data int popped_id = -1
+		data int eid = UNDEFINED
+		data int popped_id = UNDEFINED
 
 		// exported port defination
 		export port Port_t init()
@@ -342,14 +340,18 @@ package sched
 		}
 
 		on beg from PREEMPT to BUSY1 do {
+			stack_size = get_size(did);
 			e_count = e_count + 1;
 			printf("                [ES] on beg from PREEMPT to BUSY1, ec: %d, ss: %d\n", e_count, stack_size);
 		}	
 		
 		on fin from BUSY1 to IDLE provided(stack_size == 0)
 		do {
+			is_es_idle = ENABLE;
 			e_count = e_count - 1;
 			printf("                [ES] on fin from BUSY1 to IDLE, ec: %d, ss: %d\n", e_count, stack_size);
+			popped_id = UNDEFINED;
+			eid = UNDEFINED;
 		}
 		
 		on fin from BUSY1 to BUSY2 provided(stack_size != 0)
@@ -358,6 +360,8 @@ package sched
 			stack_size = get_size(did);
 			e_count = e_count - 1;
 			printf("                [ES] on fin from BUSY1 to BUSY2, ec: %d, ss: %d,  popped id: %d\n", e_count, stack_size, popped_id);
+			popped_id = UNDEFINED;
+			eid = UNDEFINED;
 		}
 
 		on res from BUSY2 to BUSY1 provided(e_count > 0)
@@ -367,15 +371,16 @@ package sched
 
 		on res from BUSY2 to IDLE provided(e_count == 0)
 		do {
+			is_es_idle = ENABLE;
 			printf("                [ES] on res from BUSY2 to IDLE, ec: %d, ss: %d\n", e_count, stack_size);
 		}
 	end	
 
 	// atom type of Task and Event Handler
 	atom type TaskHandler()
-		data int exe_step = 0
-		data int tid = 0
-		data int appid = 0	
+		data int exe_step = UNDEFINED
+		data int tid = UNDEFINED
+		data int appid = UNDEFINED
 
 		// port definition 
 		export port Port_tta init(tid, appid)
