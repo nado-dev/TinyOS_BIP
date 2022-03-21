@@ -8,7 +8,7 @@
 #include "my_helper.hpp"
 
 using namespace std;
-
+int arr[4];
 /**
 random num gen
 */
@@ -22,15 +22,30 @@ void init_seed()
     srand((int)time(NULL));
 }
 
-// setter
-void set_message_t(int _data, message_t adata)
+message_t init_msg_value()
 {
-    adata = _data;
+    arr[0] = -1;
+    arr[1] = -1;
+    arr[2] = -1;
+    arr[3] = -1;
+    return arr;
+}
+
+// setter
+void set_message_t(message_t adata, int seq, int ttl, int sendid, int _data)
+{
+    adata[0] = seq;
+    adata[1] = ttl;
+    adata[2] = sendid;
+    adata[3] = _data;
 }
 
 void print_message_t(message_t adata)
 {
-    cout << "[message_t] _data: " << adata << std::endl;
+    cout << "[message_t] seq: " << adata[0] << std::endl;
+    cout << "[message_t] ttl: " << adata[1] << std::endl;
+    cout << "[message_t] sendid: " << adata[2] << std::endl;
+    cout << "[message_t] data: " << adata[3] << std::endl;
 }
 
 /**

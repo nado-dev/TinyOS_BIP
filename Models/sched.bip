@@ -10,7 +10,8 @@ package sched
 
 	// transported msg
 	extern data type message_t
-	extern function set_message_t(int, message_t)
+	extern function message_t init_msg_value()
+	extern function set_message_t(message_t, int, int, int, int)
 	extern function print_message_t(message_t)
 	// helper function definition
 	extern function printf(string)
@@ -553,6 +554,7 @@ package sched
 		data int flag_send = UNDEFINED
 		data int appid = UNDEFINED
 		data message_t msg
+		data int seq = 0
 
 		// port definition 
 		export port Port_tv3 init(eid, result, value)
@@ -568,17 +570,17 @@ package sched
 
 		// behavior definition
 		initial to IDLE do { 
+			msg = init_msg_value();
 			appid = _appid; 
-			// initialize message
-			set_message_t(-1,  msg);
 		}
 
 		on init from IDLE to BOUND 
 		
 		on beg from BOUND to E1 provided (result == ENABLE)
 		do { 
-			set_message_t(value, msg);
+			set_message_t(msg, seq, 0, appid, value);
 			print_message_t(msg);
+			seq = seq + 1;
 		}
 		// set data to send
 
@@ -620,6 +622,7 @@ package sched
 		initial to IDLE do { 
 			appid = _appid; 
 			cid = _cid;
+			msg = init_msg_value();
 		}
 		
 		on beg from IDLE to E1
@@ -682,7 +685,10 @@ package sched
 		place IDLE, BOUND, EXE, SUSP
 
 		// behavior definition
-		initial to IDLE do { appid = _appid; }
+		initial to IDLE do { 
+			appid = _appid; 
+			payload = init_msg_value();
+		}
 
 		on init from IDLE to BOUND 
 
@@ -931,7 +937,10 @@ package sched
 		place IDLE, SEND, FIN
 
 		// interaction definition
-		initial to IDLE do {flag_send_enable = ENABLE;}
+		initial to IDLE do {
+			flag_send_enable = ENABLE;
+			packet = init_msg_value();
+		}
 		
 		on syn_send from IDLE to SEND do {flag_send_enable = DISABLE;}
 
@@ -956,7 +965,7 @@ package sched
 		place IDLE, RECV
 		
 		// interaction definition
-		initial to IDLE
+		initial to IDLE do { packet = init_msg_value(); }
 
 		on listen from IDLE to RECV
 
