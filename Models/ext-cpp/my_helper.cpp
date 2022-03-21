@@ -22,31 +22,31 @@ void init_seed()
     srand((int)time(NULL));
 }
 
-message_t init_msg_value()
+class Message
 {
-    arr[0] = -1;
-    arr[1] = -1;
-    arr[2] = -1;
-    arr[3] = -1;
-    return arr;
-}
+private:
+    int arr[4];
 
-// setter
-void set_message_t(message_t adata, int seq, int ttl, int sendid, int _data)
-{
-    adata[0] = seq;
-    adata[1] = ttl;
-    adata[2] = sendid;
-    adata[3] = _data;
-}
+public:
+    Message() {}
+    message_t init_msg_value()
+    {
+        arr[0] = 0;
+        arr[1] = 0;
+        arr[2] = 0;
+        arr[3] = 0;
+        return arr;
+    }
 
-void print_message_t(message_t adata)
-{
-    cout << "[message_t] seq: " << adata[0] << std::endl;
-    cout << "[message_t] ttl: " << adata[1] << std::endl;
-    cout << "[message_t] sendid: " << adata[2] << std::endl;
-    cout << "[message_t] data: " << adata[3] << std::endl;
-}
+    // setter
+    void set_message_t(message_t adata, int seq, int ttl, int sendid, int _data)
+    {
+        adata[0] = seq;
+        adata[1] = ttl;
+        adata[2] = sendid;
+        adata[3] = _data;
+    }
+};
 
 /**
 stack helper
@@ -189,3 +189,46 @@ int get_size(int appid)
     EventStack *es = get_stack(appid);
     return es->get_size();
 }
+
+// message
+
+map<int, Message> msg_map;
+
+Message *get_msg(int appid)
+{
+    if (msg_map.find(appid) == msg_map.end())
+    {
+        msg_map[appid] = Message();
+    }
+    return &(msg_map[appid]);
+}
+
+message_t init_msg_value(int appid)
+{
+    Message *msg = get_msg(appid);
+    return msg->init_msg_value();
+}
+
+void set_message_t(int appid, message_t adata, int seq, int ttl, int sendid, int _data)
+{
+    Message *msg = get_msg(appid);
+    return msg->set_message_t(adata, seq, ttl, sendid, _data);
+}
+
+void print_message_t(message_t adata)
+{
+        cout << "[message_t] seq: " << adata[0] << std::endl;
+        cout << "[message_t] ttl: " << adata[1] << std::endl;
+        cout << "[message_t] sendid: " << adata[2] << std::endl;
+        cout << "[message_t] data: " << adata[3] << std::endl;
+}
+
+//  led
+void print_led(int appid, int l0, int l1, int l2) 
+{
+     cout << "[LED] node: " << appid;
+     cout << "[LED] l0: " << l0;
+     cout << "[LED] l1: " << l1;
+     cout << "[LED] l2: " << l2 << std::endl; 
+}
+

@@ -4,9 +4,9 @@
 typedef int* message_t;
 
 // setter
-message_t init_msg_value();
+message_t init_msg_value(int appid);
 
-void set_message_t(message_t adata, int seq, int ttl, int sendid, int _data);
+void set_message_t(int appid, message_t adata, int seq, int ttl, int sendid, int _data);
 
 void print_message_t(message_t adata);
 
@@ -37,5 +37,9 @@ void create_stack(int appid, int size);
 
 void destroy_stack(int appid);
 
+/**
+LED state printer
+*/
+void print_led(int appid, int l0, int l1, int l2);
 #endif
 
