@@ -238,7 +238,6 @@ message_t get_null_message()
 
 int get_msg_des(message_t msg)
 {
-    assert(msg[3] > 0);
     return msg[3];
 }
 

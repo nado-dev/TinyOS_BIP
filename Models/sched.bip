@@ -180,9 +180,7 @@ package sched
 	connector type Conn_Sig_Photo_Read (Port_tv3 sensig, Port_tv essig,  Port_tv3 ehinit, Port_t chsig)
 		define sensig essig ehinit chsig
 		on sensig essig ehinit chsig
-		provided (sensig.v2 == ENABLE)
 		down {
-			printf(" [HERE] %d %d %d", sensig.v1, sensig.v2, sensig.v3);
 			ehinit.v1 = get_rand(255);
 			ehinit.v2 = sensig.v2;
 			ehinit.v3 = sensig.v3;
@@ -592,7 +590,7 @@ package sched
 		export port Port_tm call_send(msg)
 		export port Port_tv get_report(flag_send)
 		export port Port_t call_led2()
-		port Port_t fail()
+		export port Port_t fail()
 
 		// state definition
 		place IDLE, BOUND, E1, E2, E3, SUSP
@@ -604,20 +602,21 @@ package sched
 		}
 
 		on init from IDLE to BOUND 
-
-		on fail from BOUND to IDLE provided (result == DISABLE)
-		do { printf("              [EH_Photo_ReadDone] appid: %d, read failed\n", appid); }
 		
-		on beg from BOUND to E1 provided (result == ENABLE)
+		on beg from BOUND to E1
 		do { 
-			set_message_t(appid, msg, seq, 0, appid, desid, value);
-			print_message_t(msg);
-			seq = seq + 1;
+			if(result == ENABLE) then
+				set_message_t(appid, msg, seq, 0, appid, desid, value);
+				print_message_t(msg);
+				seq = seq + 1;
+			fi
 		}
 		// set data to send
+		on fail from E1 to IDLE provided (result == DISABLE)
+		do { printf("              [EH_Photo_ReadDone] appid: %d, read failed\n", appid); }
 
 		// send data
-		on call_send from E1 to E2
+		on call_send from E1 to E2 provided (result == ENABLE)
 
 		on get_report from E2 to E3
 
@@ -684,19 +683,25 @@ package sched
 		export port Port_tta pre(eid, appid)
 		export port Port_t res()
 		export port Port_t call()
+		export port Port_t fail()
 
 		// state definition
-		place IDLE, BOUND, EXE, SUSP
+		place IDLE, BOUND, EXE, SUSP, FAILED
 
 		// behavior definition
 		initial to IDLE do { appid = _appid; }
 
 		on init from IDLE to BOUND 
 		
-		on beg from BOUND to EXE provided (flag_error == ENABLE)
+		on beg from BOUND to EXE
+	
 		// set data to send
-		on call from EXE to IDLE
+		on call from EXE to IDLE provided (flag_error == ENABLE)
  
+		// send data failed
+		on fail from EXE to IDLE provided (flag_error == DISABLE)
+		do { printf("	[Exception] Send failed! from did: %d", appid); }
+
 		on pre from EXE to SUSP 
 
 		on res from SUSP to EXE 
@@ -1105,6 +1110,7 @@ package sched
 		export port Port_tmv2 upload(succ_rate ,state, packet)
 		export port Port_tvm download(des, packet)
 		port Port_t done()
+		port Port_t fail()
 		
 		place IDLE, BUSY1, BUSY2
 
@@ -1118,6 +1124,11 @@ package sched
 			is_channel_busy = ENABLE; 
 			des = get_msg_des(packet);
 			printf("                [Channel-d] des: %d\n", des);
+		}
+
+		on fail from BUSY1 to IDLE do{
+			is_channel_busy = DISABLE; 
+			des = UNDEFINED;
 		}
 
 		on download from BUSY1 to BUSY2 provided(state == ENABLE)
@@ -1144,7 +1155,7 @@ package sched
 		component EventHandler eh_sen1_data_ready(), eh_timer()
 		component CommandHandler ch_sen1_get_data(7777, 7777)
 
-		component Environment env(100) 
+		component Environment env(0) 
 
 		// System Boot
 		connector Conn2 scheduler_init(
@@ -1298,7 +1309,7 @@ package sched
 		component Timer timer1(appid, 1, 0) // debug: not use timer now
 		component SampleApplication app1(appid, 0, 1) // noting to post and signal once
 		component Sensor sen1(appid)	
-		component Environment env(100) 
+		component Environment env(100)  // scuuess rate
 		component LED led(appid)
 
 		// bussiness ch/eh/th
@@ -1358,7 +1369,6 @@ package sched
 			ch_datamsg_send.send,
 			sender.syn_send
 		)
-
 		// provided: if snd succeed // todo sequence problem
 		connector Conn3_Radio_Senddone conn_radio_senddone(
 			eh_photo_readdone.get_report,
@@ -1370,6 +1380,11 @@ package sched
 			es.fin,
 			eh_photo_readdone.call_led2,
 			led.led2on
+		)
+		// may read failed
+		connector Conn2 conn_photo_read_fail(
+			es.fin,
+			eh_photo_readdone.fail
 		)
 		
 		connector Conn3_Datamsg_Senddone conn_datamsg_senddone(	
@@ -1387,6 +1402,11 @@ package sched
 			es.fin,
 			eh_datamsg_senddone.call,
 			led.led2off
+		)
+		// may send failed
+		connector Conn2 conn_datamsg_senddone_fail(
+			es.fin,
+			eh_datamsg_senddone.fail
 		)
 
 		// msg receiver todo
@@ -1406,6 +1426,7 @@ package sched
 			eh_recvmsg_receive.call,
 			led.led0on
 		)
+		
 		// preem enable
 		connector Conn6_Preem conn_pre(
 			es.pre,
@@ -1458,7 +1479,7 @@ package sched
 		// component SampleNode snode() 
 		component BasicMACM node1(1111, 2222)
 		component BasicMACM node2(2222, 1111)
-		component Channel chan(0)	
+		component Channel chan(0)	// faiiled rate
 
 		// node1 to node2
 		// 1. try to send
