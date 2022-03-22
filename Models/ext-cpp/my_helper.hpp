@@ -1,12 +1,18 @@
 #ifndef _MyHelper
 #define _MyHelper
 
-typedef int message_t;
+typedef int* message_t;
 
 // setter
-void set_message_t(int _data, message_t adata);
+message_t init_msg_value(int appid);
+
+void set_message_t(int appid, message_t adata, int seq, int ttl, int sendid, int desid, int _data);
 
 void print_message_t(message_t adata);
+
+message_t get_null_message();
+
+int get_msg_des(message_t msg);
 
 /**
 random num gen
@@ -35,5 +41,9 @@ void create_stack(int appid, int size);
 
 void destroy_stack(int appid);
 
+/**
+LED state printer
+*/
+void print_led(int appid, int l0, int l1, int l2);
 #endif
 

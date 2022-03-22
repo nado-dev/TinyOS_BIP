@@ -8,7 +8,7 @@
 #include "my_helper.hpp"
 
 using namespace std;
-
+int nullaar[5];
 /**
 random num gen
 */
@@ -22,16 +22,33 @@ void init_seed()
     srand((int)time(NULL));
 }
 
-// setter
-void set_message_t(int _data, message_t adata)
+class Message
 {
-    adata = _data;
-}
+private:
+    int arr[5];
 
-void print_message_t(message_t adata)
-{
-    cout << "[message_t] _data: " << adata << std::endl;
-}
+public:
+    Message() {}
+    message_t init_msg_value()
+    {
+        arr[0] = 0;
+        arr[1] = 0;
+        arr[2] = 0;
+        arr[3] = 0;
+        arr[4] = 0;
+        return arr;
+    }
+
+    // setter
+    void set_message_t(message_t adata, int seq, int ttl, int sendid,int desid, int _data)
+    {
+        adata[0] = seq;
+        adata[1] = ttl;
+        adata[2] = sendid;
+        adata[3] = desid;
+        adata[4] = _data;
+    }
+};
 
 /**
 stack helper
@@ -174,3 +191,62 @@ int get_size(int appid)
     EventStack *es = get_stack(appid);
     return es->get_size();
 }
+
+// message
+
+map<int, Message> msg_map;
+
+Message *get_msg(int appid)
+{
+    if (msg_map.find(appid) == msg_map.end())
+    {
+        msg_map[appid] = Message();
+    }
+    return &(msg_map[appid]);
+}
+
+message_t init_msg_value(int appid)
+{
+    Message *msg = get_msg(appid);
+    return msg->init_msg_value();
+}
+
+void set_message_t(int appid, message_t adata, int seq, int ttl, int sendid, int desid, int _data)
+{
+    Message *msg = get_msg(appid);
+    return msg->set_message_t(adata, seq, ttl, sendid, desid, _data);
+}
+
+void print_message_t(message_t adata)
+{
+        cout << "[message_t] seq: " << adata[0] << std::endl;
+        cout << "[message_t] ttl: " << adata[1] << std::endl;
+        cout << "[message_t] sendid: " << adata[2] << std::endl;
+        cout << "[message_t] desid: " << adata[3] << std::endl;
+        cout << "[message_t] data: " << adata[4] << "C" << std::endl;
+}
+
+message_t get_null_message()
+{
+    nullaar[0] = -100;
+    nullaar[1] = -100;
+    nullaar[2] = -100;
+    nullaar[3] = -100;
+    nullaar[4] = -100;
+    return nullaar;
+}
+
+int get_msg_des(message_t msg)
+{
+    return msg[3];
+}
+
+//  led
+void print_led(int appid, int l0, int l1, int l2) 
+{
+     cout << "[LED] node: " << appid << std::endl; 
+     cout << "[LED] l0: " << l0 << std::endl; 
+     cout << "[LED] l1: " << l1<< std::endl; 
+     cout << "[LED] l2: " << l2 << std::endl; 
+}
+
