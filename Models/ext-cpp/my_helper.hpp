@@ -14,6 +14,8 @@ message_t get_null_message();
 
 int get_msg_des(message_t msg);
 
+int get_msg_data(message_t msg);
+
 /**
 random num gen
 */

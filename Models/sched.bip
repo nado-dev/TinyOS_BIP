@@ -16,6 +16,7 @@ package sched
 	extern function print_message_t(message_t)
 	extern function message_t get_null_message()
 	extern function int get_msg_des(message_t)
+	extern function int get_msg_data(message_t)
 	// helper function definition
 	extern function printf(string)
 	extern function printf(string, int)
@@ -86,55 +87,41 @@ package sched
 	end
 
 	// for task to finish
-	connector type Conn2_Finish(Port_tta p1, Port_t p2)
-		define p1 p2	
-		on p1 p2
-		provided(p1.tid != 0 && p1.appid != 0)
-	end
-	
-	connector type Conn2_Finish_1(Port_tv p1, Port_t p2)
-		define p1 p2	
+	connector type Conn3_Finish(Port_tta p1, Port_t p2, Port_t p3)
+		define p1 p2 p3	
+		on p1 p2 p3
 	end
 
 	// test: for 4-TH/CH only , act like a boradcast
-	connector type Conn6_Preem(Port_t es, Port_tta p1, Port_tta p2, Port_tta p3, Port_tta p4, Port_tta p5)
-		define es' p1 p2 p3 p4 p5
+	connector type Conn7_Preem(Port_tv es, Port_tta p1, Port_tta p2, Port_tta p3, Port_tta p4, Port_tta p5, Port_tta p6)
+		define es' p1 p2 p3 p4 p5 p6
 		on es                        down {
-			printf("                [Conn4_Preem] no task is preemted, go on \n");
+			printf("                [Conn7_Preem] no task is preemted, go on \n");
 		}
 		on es  p1                  down {
 			push(p1.appid, p1.tid);
-			printf("                [Conn4_Preem] preempted tasks is stacked, %d\n", p1.tid);
+			printf("                [Conn7_Preem] preempted tasks is stacked, %d\n", p1.tid);
 		}
 		on es     p2               down {
 			push(p2.appid, p2.tid);
-			printf("                [Conn4_Preem] preempted tasks is stacked, %d\n", p2.tid);
+			printf("                [Conn7_Preem] preempted tasks is stacked, %d\n", p2.tid);
 		}
 		on es           p3         down {
 			push(p3.appid, p3.tid);
-			printf("                [Conn4_Preem] preempted tasks is stacked, %d\n", p3.tid);
+			printf("                [Conn7_Preem] preempted tasks is stacked, %d\n", p3.tid);
 		}
 		on es               p4     down {
 			push(p4.appid, p4.tid);
-			printf("                [Conn4_Preem] preempted tasks is stacked, %d\n", p4.tid);
+			printf("                [Conn7_Preem] preempted tasks is stacked, %d\n", p4.tid);
 		}
 		on es                   p5 down {
 			push(p5.appid, p5.tid);
-			printf("                [Conn4_Preem] preempted tasks is stacked, %d\n", p5.tid);
+			printf("                [Conn7_Preem] preempted tasks is stacked, %d\n", p5.tid);
 		}
-	end
-
-	// post
-	connector type Conn3_P(Port_tv app ,Port_tta ts, Port_tta th_bound)	
-		define app ts th_bound
-		on app ts th_bound
-		provided (th_bound.tid == 0)
-		down {
-			th_bound.tid = get_rand(255); 
-			th_bound.appid = app.v;
-			ts.tid = th_bound.tid;
-			ts.appid = app.v;	
-		}
+		on es                       p6 down {
+			push(p6.appid, p6.tid);
+			printf("                [Conn7_Preem] preempted tasks is stacked, %d\n", p6.tid);
+		}	
 	end
 
 	connector type Conn3_Timer_Sig(Port_t timer, Port_tv es, Port_tv3 eh)
@@ -146,6 +133,18 @@ package sched
 			eh.v3 = -2;
 			es.v = eh.v1;	
 		}
+	end
+	
+	connector type Conn4_Post_Task(Port_tm ehrec, Port_t led, Port_tmv2 thinit, Port_tta ts)
+		define  ehrec led thinit ts
+		on ehrec led thinit ts
+		down {
+			thinit.msg = ehrec.msg;
+			ts.appid = thinit.v1;
+			thinit.v2 = get_rand(255); 
+			ts.tid = thinit.v2;
+		}
+			
 	end
 
 	// signal
@@ -251,14 +250,12 @@ package sched
 		data int tid = UNDEFINED
 		data int temp =UNDEFINED
 		data int flag_is_running = DISABLE
-		data int flag_is_es_free = UNDEFINED
 		
    		 // port instance define
 		export port Port_t init()
    		export port Port_t beg()
   		export port Port_t fin()
     		export port Port_tta post(tid, appid)	
-		export port Port_tv tick(flag_is_es_free) // spinning	
 
     		// place define
     		place BOOT, FREE, BUSY
@@ -266,9 +263,9 @@ package sched
 		initial to BOOT
 		
   		// initial of task queue
-		on init from BOOT to FREE do { scheuler_init(did);}
+		on init from BOOT to FREE delayable do { scheuler_init(did);}
 
-   		on beg from FREE to BUSY provided (task_count != 0 && flag_is_running == DISABLE && enable == ENABLE)	
+   		on beg from FREE to BUSY provided (task_count != 0 && flag_is_running == DISABLE && enable == ENABLE) delayable
  		do {	
 			flag_is_running = ENABLE;
 			pop_task(did);
@@ -276,7 +273,7 @@ package sched
 			printf("                [TS] on beg from FREE to BUSY tc:%d\n", task_count);
 		}
 
-    		on post from FREE to FREE provided (task_count < TASK_BUFFER_LIMIT && enable == ENABLE)
+    		on post from FREE to FREE provided (task_count < TASK_BUFFER_LIMIT && enable == ENABLE) delayable
 		do{
 			temp = push_task(did, tid);
 			// add to queue
@@ -290,7 +287,7 @@ package sched
 			temp = UNDEFINED;
 		}
 
-    		on post from BUSY to BUSY provided (task_count < TASK_BUFFER_LIMIT)
+    		on post from BUSY to BUSY provided (task_count < TASK_BUFFER_LIMIT) delayable
 		do{
 			temp = push_task(did, tid);
 			// add to queue
@@ -304,22 +301,11 @@ package sched
 			temp = UNDEFINED;
 		}
 
-    		on fin from BUSY to FREE do {
+    		on fin from BUSY to FREE delayable do {
 			flag_is_running = DISABLE;
-			ptv = pop_task(did);
-			if(ptv == NO_TASK) 
-			then 
-				printf("                [USER_DEFINE_ERROR] pop failed, NO_TASK\n");
-			else 
-				task_count = get_task_count(did);
-				printf("                [TS]popped task tid %d\n", ptv);
-			fi
 			printf("                [TS] on fin from BUSY to FREE do tc:%d\n", task_count);
-			ptv = UNDEFINED;
 			tid = UNDEFINED;
 		}	
-
-		on tick from FREE to FREE provided (task_count == 0 && enable == ENABLE)
 
 	end
 
@@ -335,7 +321,7 @@ package sched
 		// exported port defination
 		export port Port_t init()
 		export port Port_t beg()
-		export port Port_t pre()
+		export port Port_tv pre(eid)
 		export port Port_t fin()
 		export port Port_tv sig(eid)
 		export port Port_t res()
@@ -347,7 +333,7 @@ package sched
 		// behaviour defination
 		initial to INIT
 
-		on init from INIT to IDLE do {
+		on init from INIT to IDLE delayable do {
 			create_stack(did, 255);
 			is_es_idle = ENABLE;
 			e_count = 0;
@@ -356,25 +342,25 @@ package sched
 		}
 
 		// only when ES is IDLE, TS can start a new task
-		on test from IDLE to IDLE do {is_es_idle = ENABLE;}
+		on test from IDLE to IDLE delayable do {is_es_idle = ENABLE;}
 
-		on sig from IDLE to ACCEPT do {
+		on sig from IDLE to ACCEPT delayable do {
 			is_es_idle = DISABLE;
 			printf("                [ES] on sig from IDLE to ACCEPT, ec: %d, ss: %d\n", e_count, stack_size);
 		} 
 
-		on pre from ACCEPT to PREEMPT do {
+		on pre from ACCEPT to PREEMPT delayable do {
 			stack_size = get_size(did);
 			printf("                [ES] on pre from ACCEPT to PREEMPT, ec: %d, ss: %d\n", e_count, stack_size);
 		}
 
-		on beg from PREEMPT to BUSY1 do {
+		on beg from PREEMPT to BUSY1 delayable do {
 			stack_size = get_size(did);
 			e_count = e_count + 1;
 			printf("                [ES] on beg from PREEMPT to BUSY1, ec: %d, ss: %d\n", e_count, stack_size);
 		}	
 		
-		on fin from BUSY1 to IDLE provided(stack_size == 0)
+		on fin from BUSY1 to IDLE provided(stack_size == 0) delayable
 		do {
 			is_es_idle = ENABLE;
 			e_count = e_count - 1;
@@ -383,7 +369,7 @@ package sched
 			eid = UNDEFINED;
 		}
 		
-		on fin from BUSY1 to BUSY2 provided(stack_size != 0)
+		on fin from BUSY1 to BUSY2 provided(stack_size != 0) delayable
 		do {
 			popped_id = pop(did); 	// pop from stack
 			stack_size = get_size(did);
@@ -393,12 +379,12 @@ package sched
 			eid = UNDEFINED;
 		}
 
-		on res from BUSY2 to BUSY1 provided(e_count > 0)
+		on res from BUSY2 to BUSY1 provided(e_count > 0) delayable
 		do {
 			printf("                [ES] on res from BUSY2 to BUSY1, ec: %d, ss: %d\n", e_count, stack_size);
 		}
 
-		on res from BUSY2 to IDLE provided(e_count == 0)
+		on res from BUSY2 to IDLE provided(e_count == 0) delayable
 		do {
 			is_es_idle = ENABLE;
 			printf("                [ES] on res from BUSY2 to IDLE, ec: %d, ss: %d\n", e_count, stack_size);
@@ -406,111 +392,46 @@ package sched
 	end	
 
 	// atom type of Task and Event Handler
-	atom type TaskHandler()
+	atom type TH_AVG(int _appid)
 
-		data int exe_step = UNDEFINED
 		data int tid = UNDEFINED
 		data int appid = UNDEFINED
+		data message_t msg
+		data int avg_temperature = 0
+		data int counter = 0
+		data int temp = 0
 
 		// port definition 
-		export port Port_tta init(tid, appid)
+		export port Port_tmv2 init(appid, tid, msg)
 		export port Port_t beg()
 		export port Port_tta fin(tid, appid)
 		export port Port_tta pre(tid, appid)
 		export port Port_t res()
-		port Port_t exe()
-
-		// state definition
-		place IDLE, BOUND, EXE, SUSP, DONE
-
-		// behavior definition
-		initial to IDLE
-
-		on init from IDLE to BOUND do {
-			printf("                [TH] on init from IDLE to BOUND do , appid: %d, id: %d\n", appid, tid);
-		}
-		
-		on beg from BOUND to EXE do{
-			printf("                [TH] on begin from IDLE to EXE, id:%d\n", tid);
-		} 
-
-		// this is internal
-		on exe from EXE to EXE provided(exe_step < MAX_TASK_EXECUTION_STEP)
-		do {
-			exe_step = exe_step + 1;
-			printf("                [TH] executing, id:%d, step: %d\n", tid, exe_step);
-		}
-
-		on fin from EXE to DONE provided(exe_step == MAX_TASK_EXECUTION_STEP)
-		do {
-			printf("                [TH] on fin from EXE to DONE, id:%d\n", tid);
-		}
-
-		on pre from EXE to SUSP do {
-			 printf("                [TH] on pre from EXE to SUSP, th is premeeted, going to SUSPEND, id:%d\n", tid);
-		}
-
-		on res from SUSP to EXE do {
-			printf("                [TH] on res from SUSP to EXE, id:%d\n", tid);
-		}
-			
-	end
-
-	atom type EventHandler()
-		// data definition
-		data int exe_step = 0
-		data int eid = 0	
-		data int state= 0
-		data int value = 0
-		data int appid = -1
-
-		// port definition 
-		export port Port_tv3 init(eid, state, value)
-		export port Port_t beg()
-		export port Port_tv fin(eid)
-		export port Port_tta pre(eid, appid)
-		export port Port_t res()
-		port Port_t exe()
 
 		// state definition
 		place IDLE, BOUND, EXE, SUSP
 
 		// behavior definition
-		initial to IDLE
-
-		on init from IDLE to BOUND do {
-			printf("                [EH] on init from IDLE to BOUND do ,id: %d\n", eid);
-			printf("                [EH] read value: state: %d, value: %d\n", state, value);
+		initial to IDLE do {
+			msg = get_null_message();
+			appid = _appid;
 		}
+
+		on init from IDLE to BOUND delayable
 		
-		on beg from BOUND to EXE do{
-			printf("                [EH] on begin from IDLE to EXE, id:%d\n", eid);
-		} 
+		on beg from BOUND to EXE delayable
 
-		// this is internal
-		on exe from EXE to EXE provided(exe_step < MAX_TASK_EXECUTION_STEP)
-		do {
-			exe_step = exe_step + 1;
-			printf("                [EH] executing, id:%d, step: %d\n", eid, exe_step);
+		on fin from EXE to IDLE delayable do {
+			temp = get_msg_data(msg);
+			if(temp > 0) then
+				avg_temperature = ((avg_temperature * counter) + temp) / (counter + 1);
+				counter = counter + 1;
+				printf("                [TH_AVG] recevied temperature: %d, avg temp is %d\n", temp, avg_temperature);
+			fi
 		}
 
-		on fin from EXE to IDLE provided(exe_step == MAX_TASK_EXECUTION_STEP)
-		do {
-			exe_step = 0;
-			eid = 0;
-			state= 0;
-			value = 0;
-			appid = -1;
-			printf("                [EH] on fin from EXE to IDLE, id:%d\n", eid);
-		}
-
-		on pre from EXE to SUSP do {
-			 printf("                [EH] on pre from EXE to SUSP, th is premeeted, going to SUSPEND, id:%d\n", eid);
-		}
-
-		on res from SUSP to EXE do {
-			printf("                [EH] on res from SUSP to EXE, id:%d\n", eid);
-		}
+		on pre from EXE to SUSP delayable
+		on res from SUSP to EXE delayable
 			
 	end
 
@@ -533,16 +454,16 @@ package sched
 		// behavior definition
 		initial to IDLE do { appid = _appid; }
 
-		on init from IDLE to BOUND 
+		on init from IDLE to BOUND delayable
 		
-		on beg from BOUND to EXE 
+		on beg from BOUND to EXE delayable
 		// 1. call Leds.led1Toggle()
 		// 2. call Photo.read()
-		on call from EXE to IDLE 
+		on call from EXE to IDLE delayable
 
-		on pre from EXE to SUSP 
+		on pre from EXE to SUSP delayable
 
-		on res from SUSP to EXE 
+		on res from SUSP to EXE delayable
 			
 	end
 
@@ -565,13 +486,13 @@ package sched
 			cid = _cid;
 		}
 		
-		on beg from IDLE to EXE
+		on beg from IDLE to EXE delayable
 
-		on sig from EXE to IDLE 
+		on sig from EXE to IDLE delayable
 
-		on pre from EXE to SUSP 
+		on pre from EXE to SUSP delayable
 
-		on res from SUSP to EXE 
+		on res from SUSP to EXE delayable
 
 	end
 
@@ -605,9 +526,9 @@ package sched
 			appid = _appid; 
 		}
 
-		on init from IDLE to BOUND 
+		on init from IDLE to BOUND delayable
 		
-		on beg from BOUND to E1
+		on beg from BOUND to E1 delayable
 		do { 
 			if(result == ENABLE) then
 				set_message_t(appid, msg, seq, 0, appid, desid, value);
@@ -616,23 +537,23 @@ package sched
 			fi
 		}
 		// set data to send
-		on fail from E1 to IDLE provided (result == DISABLE)
+		on fail from E1 to IDLE provided (result == DISABLE) delayable
 		do { printf("              [EH_Photo_ReadDone] appid: %d, read failed\n", appid); }
 
 		// send data
-		on call_send from E1 to E2 provided (result == ENABLE)
+		on call_send from E1 to E2 provided (result == ENABLE) delayable
 
-		on get_report from E2 to E3
+		on get_report from E2 to E3 delayable
 
-		on call_led2 from E3 to IDLE provided(flag_send == ENABLE)
+		on call_led2 from E3 to IDLE provided(flag_send == ENABLE) delayable
 
-		on pre from E1 to SUSP do {flag_last_estate = 1;}
-		on pre from E2 to SUSP do {flag_last_estate = 2;}
-		on pre from E3 to SUSP do {flag_last_estate = 3;}
+		on pre from E1 to SUSP delayable do {flag_last_estate = 1;}
+		on pre from E2 to SUSP delayable do {flag_last_estate = 2;}
+		on pre from E3 to SUSP delayable do {flag_last_estate = 3;}
 
-		on res from SUSP to E1 provided(flag_last_estate == 1)
-		on res from SUSP to E2 provided(flag_last_estate == 2)
-		on res from SUSP to E3 provided(flag_last_estate == 3)
+		on res from SUSP to E1  provided(flag_last_estate == 1) delayable
+		on res from SUSP to E2  provided(flag_last_estate == 2) delayable
+		on res from SUSP to E3  provided(flag_last_estate == 3) delayable
 
 	end
 
@@ -661,17 +582,17 @@ package sched
 			msg = get_null_message();
 		}
 		
-		on beg from IDLE to E1
+		on beg from IDLE to E1 delayable
 
-		on send from E1 to E2
+		on send from E1 to E2 delayable
 		
-		on sig from E2 to IDLE 
+		on sig from E2 to IDLE delayable
 
-		on pre from E1 to SUSP do {flag_last_e = 1;}
-		on pre from E2 to SUSP do {flag_last_e = 2;}
+		on pre from E1 to SUSP delayable do {flag_last_e = 1;}
+		on pre from E2 to SUSP delayable do {flag_last_e = 2;}
 
-		on res from SUSP to E1 provided(flag_last_e == 1)  
-		on res from SUSP to E2 provided(flag_last_e == 2)  
+		on res from SUSP to E1  provided(flag_last_e == 1)  delayable
+		on res from SUSP to E2  provided(flag_last_e == 2)  delayable
 
 	end
 	
@@ -695,20 +616,20 @@ package sched
 		// behavior definition
 		initial to IDLE do { appid = _appid; }
 
-		on init from IDLE to BOUND 
+		on init from IDLE to BOUND delayable
 		
-		on beg from BOUND to EXE
+		on beg from BOUND to EXE delayable
 	
 		// set data to send
-		on call from EXE to IDLE provided (flag_error == ENABLE)
+		on call from EXE to IDLE provided (flag_error == ENABLE) delayable
  
 		// send data failed
-		on fail from EXE to IDLE provided (flag_error == DISABLE)
+		on fail from EXE to IDLE provided (flag_error == DISABLE) delayable
 		do { printf("	[Exception] Send failed! from did: %d", appid); }
 
-		on pre from EXE to SUSP 
+		on pre from EXE to SUSP delayable
 
-		on res from SUSP to EXE 
+		on res from SUSP to EXE delayable
 
 	end
 
@@ -723,7 +644,7 @@ package sched
 		export port Port_t beg()
 		export port Port_tta pre(eid, appid)
 		export port Port_t res()
-		export port Port_t call()
+		export port Port_tm call(payload)
 
 		// state definition
 		place IDLE, BOUND, EXE, SUSP
@@ -734,126 +655,21 @@ package sched
 			payload = get_null_message();
 		}
 
-		on init from IDLE to BOUND 
+		on init from IDLE to BOUND delayable
 
-		on beg from BOUND to EXE
+		on beg from BOUND to EXE delayable
 		
-		on call from EXE to IDLE do { print_message_t(payload); }
+		on call from EXE to IDLE delayable do { print_message_t(payload); }
 		// set data to send
 
-		on pre from EXE to SUSP 
+		on pre from EXE to SUSP delayable
 
-		on res from SUSP to EXE 
-
-	end
-
-	// Command Handler is quite differnet from TH and EH, it will return a value indicates it succees or not
-	// no scheduler related
-	atom type CommandHandler(int _cid, int _appid)
-		// data definition
-		data int cid = UNDEFINED
-		data int appid = UNDEFINED
-		data int read_state = UNDEFINED
-			
-		// port definition 
-		export port Port_t beg()
-		export port Port_tv fin(read_state)
-		export port Port_tta pre(cid, appid)
-		export port Port_t res()
-		export port Port_t done()
-		
-		// state definition
-		place IDLE, EXE, SUSP, DONE
-
-		// behavior definition
-		initial to IDLE do {
-			cid = _cid;
-			appid = _appid;
-			read_state = DISABLE;
-		}
-		
-		on beg from IDLE to EXE do{
-			printf("                [CH] on begin from IDLE to EXE, cid:%d\n", cid);
-		} 
-
-		on fin from EXE to DONE 
-		do {
-			printf("                [CH] on fin from EXE to DONE, cid:%d, >>>[read_state]: %d\n", cid, read_state);
-		}
-
-		on pre from EXE to SUSP do {
-			printf("                [CH] on pre from EXE to SUSP, th is premeeted, going to SUSPEND, cid:%d\n", cid);
-		}
-
-		on res from SUSP to EXE do {
-			printf("                [CH] on res from SUSP to EXE, cid:%d\n", cid);
-		}
-		
-		on done from DONE to DONE
-
-	end
-
-	atom type Timer( int timer_id, int expire_in, int is_one_shot) 
-
-		data int count_down = UNDEFINED
-		data int t = 0
-		data int flag_is_posted = DISABLE
-
-		// port definition
-		export port Port_t post()
-		export port Port_t sig()
-		export port Port_t stop()
-		export port Port_t interval()
-		port Port_t tick()
-		
-		// state definition
-		place INIT, EXE, DONE
-		
-		// interaction definition
-		initial to INIT do { count_down = 0; }
-	
-		on post from INIT to EXE provided (count_down == 0 && flag_is_posted == DISABLE && is_one_shot == DISABLE)
-		do {
-			flag_is_posted = ENABLE;
-			count_down = expire_in;
-			printf("                [Timer] on post from INIT to EXE, new event set:%d, expire in:%d, timer ID: %d\n", t, expire_in, timer_id);
-		}
-
-		on interval from INIT to EXE provided (count_down == 0 && flag_is_posted == ENABLE)
-		do {
-			count_down = expire_in;
-			printf("                [Timer] on interval from INIT to EXE, new event set:%d, expire in:%d, timer ID: %d\n", t, expire_in, timer_id);
-		}
-
-		on tick from EXE to EXE provided (count_down > 0)
-		do {
-			// todo: real time related?
-			printf("                [Timer] on tick from EXE to EXE, remain countdown %d/%d\n", count_down, expire_in);
-			count_down = count_down - 1;
-		}
-		
-		on sig from EXE to INIT provided (count_down == 0 && is_one_shot == DISABLE)
-		do {
-			printf("                [Timer] on sig from EXE to INIT\n");
-			// start a interval 
-			count_down = 0;
-		}
-
-		on sig from EXE to DONE provided (count_down == 0 && is_one_shot == ENABLE)
-		do {
-			printf("                [Timer] on sig from DONE to INIT\n");
-			// start a interval 
-			count_down = 0;
-		}
-
-		on stop from EXE to INIT do { count_down = 0; }
+		on res from SUSP to EXE delayable
 
 	end
 
 	atom type Timer_New( int timer_id, int expire_in, int is_one_shot) 
 
-		data int count_down = UNDEFINED
-		data int t = 0
 		data int flag_is_posted = DISABLE
 
 		clock x unit millisecond
@@ -864,60 +680,44 @@ package sched
 		export port Port_t sig()
 		export port Port_t stop()
 		export port Port_t interval()
-		port Port_t tick()
 		
 		// state definition
 		place INIT, EXE, DONE
 		
 		// interaction definition
 		initial to INIT do { 
-			count_down = 0; 
+			x = 0;
 			tu' =0; 
 			tu = 1;
-			printf("<<<<<<< %Ld\n", x / tu);
 		}
 	
-		on post from INIT to EXE provided (count_down == 0 && flag_is_posted == DISABLE && is_one_shot == DISABLE)
+		on post from INIT to EXE provided (flag_is_posted == DISABLE && is_one_shot == DISABLE) delayable
 		do {
+			printf("<<<<<<<[post] %Ld\n", x / tu);
 			flag_is_posted = ENABLE;
-			count_down = expire_in;
-			printf("                [Timer] on post from INIT to EXE, new event set:%d, expire in:%d, timer ID: %d\n", t, expire_in, timer_id);
-			printf("<<<<<<< %Ld\n", x / tu);
-		}
-
-		on interval from INIT to EXE provided (x == 300 && count_down == 0 && flag_is_posted == ENABLE)
-		do {
-			count_down = expire_in;
-			printf("                [Timer] on interval from INIT to EXE, new event set:%d, expire in:%d, timer ID: %d\n", t, expire_in, timer_id);
-			printf("<<<<<<< %Ld\n", x / tu);
-		}
-
-		on tick from EXE to EXE provided (count_down > 0)
-		do {
-			// todo: real time related?
-			printf("                [Timer] on tick from EXE to EXE, remain countdown %d/%d\n", count_down, expire_in);
-			count_down = count_down - 1;
-			printf("<<<<<<< %Ld\n", x / tu);
-		}
-		
-		on sig from EXE to INIT provided (count_down == 0 && is_one_shot == DISABLE)
-		do {
-			printf("                [Timer] on sig from EXE to INIT\n");
-			// start a interval 
-			count_down = 0;
 			x = 0;
-			printf("<<<<<<< %Ld\n", x / tu);
+			
 		}
 
-		on sig from EXE to DONE provided (count_down == 0 && is_one_shot == ENABLE)
+		on interval from INIT to EXE provided (x == expire_in && flag_is_posted == ENABLE) delayable
 		do {
-			printf("                [Timer] on sig from DONE to INIT\n");
-			// start a interval 
-			count_down = 0;
-			printf("<<<<<<< %Ld\n", x / tu);
+			printf("<<<<<<<[interval] %Ld\n", x / tu);
+			x = 0;
 		}
 
-		on stop from EXE to INIT do { count_down = 0; }
+		
+		on sig from EXE to INIT provided (is_one_shot == DISABLE) delayable
+		do {
+			// start a interval 
+			printf("<<<<<<<[sig] %Ld\n", x / tu);
+			x = 0;
+		}
+
+		on sig from EXE to DONE provided (is_one_shot == ENABLE) delayable
+
+		on stop from EXE to INIT delayable do { 
+			x = 0;
+		}
 
 	end
 
@@ -943,19 +743,19 @@ package sched
 			read_state = DISABLE;
 		}
 
-		on read from EXE1 to EXE2 do{
+		on read from EXE1 to EXE2 delayable do{
 			is_idle = ENABLE;
 			printf("                [Sensor] on beg from EXE1 to EXE2, sid: %d\n", sid);
 		}
 
-		on sig from EXE2 to EXE1 do {	
+		on sig from EXE2 to EXE1 delayable do {	
 			is_idle = DISABLE;
 			printf("                [Sensor] on sig from EXE2 to EXE1, sid: %d\n", sid);
 		}
 
-		on test from EXE1 to EXE1
+		on test from EXE1 to EXE1 delayable
 		
-		on test from EXE2 to EXE2
+		on test from EXE2 to EXE2 delayable
 
 	end
 
@@ -973,23 +773,23 @@ package sched
 
 		initial to NE
 
-		on sched_init from NE to SI do {
+		on sched_init from NE to SI delayable do {
 			printf("                [TOS_BOOT] from node %d, 1. scheduler init\n", appid);
 		}
 
-		on platform_init from SI to PI do {
+		on platform_init from SI to PI delayable do {
 			printf("                [TOS_BOOT] from node %d 2. platform init\n", appid);
 		}
 
-		on enable_interrupt from PI to IE do {
+		on enable_interrupt from PI to IE delayable do {
 			printf("                [TOS_BOOT] from node %d 3. enable interrupt\n", appid);
 		}
 
-		on booted from IE to BO do {
+		on booted from IE to BO delayable do {
 			printf("                [TOS_BOOT] from node %d 4. booted\n", appid);
 		}
 
-		on task_loop from BO to SC do {
+		on task_loop from BO to SC delayable do {
 			printf("                [TOS_BOOT] from node %d 5. task loop begin\n", appid);
 		}
 
@@ -1063,15 +863,15 @@ package sched
 			packet = get_null_message();
 		}
 		
-		on syn_send from IDLE to SEND do {flag_send_enable = ENABLE;}
+		on syn_send from IDLE to SEND delayable do {flag_send_enable = ENABLE;}
 
-		on broadcast from SEND to FIN do {flag_send_enable = ENABLE;}
+		on broadcast from SEND to FIN delayable do {flag_send_enable = ENABLE;}
 
-		on sig from FIN to IDLE do {flag_send_enable = DISABLE;}
+		on sig from FIN to IDLE delayable do {flag_send_enable = DISABLE;}
 		
-		on test from IDLE to IDLE
-		on test from SEND to SEND
-		on test from FIN to FIN
+		on test from IDLE to IDLE delayable
+		on test from SEND to SEND delayable
+		on test from FIN to FIN delayable
 
 	end
 	
@@ -1092,9 +892,9 @@ package sched
 			packet = get_null_message();
 		}
 
-		on listen from IDLE to RECV
+		on listen from IDLE to RECV delayable
 
-		on sig from RECV to IDLE
+		on sig from RECV to IDLE delayable
 
 	end
 
@@ -1116,28 +916,28 @@ package sched
 
 		initial to SET
 
-		on led0on from SET to SET do {
+		on led0on from SET to SET delayable do {
 			led0 = 1;
 			print_led(appid, led0, led1, led2);
 		}
-		on led1on from SET to SET do {
+		on led1on from SET to SET delayable do {
 			led1 = 1;
 			print_led(appid, led0, led1, led2);
 		}
-		on led2on from SET to SET do {
+		on led2on from SET to SET delayable do {
 			led2 = 1;
 			print_led(appid, led0, led1, led2);
 		}
 
-		on led0off from SET to SET do {
+		on led0off from SET to SET delayable do {
 			led0 = 0;
 			print_led(appid, led0, led1, led2);
 		}
-		on led1off from SET to SET do {
+		on led1off from SET to SET delayable do {
 			led1 = 0;
 			print_led(appid, led0, led1, led2);
 		}
-		on led2off from SET to SET do {
+		on led2off from SET to SET delayable do {
 			led2 = 0;
 			print_led(appid, led0, led1, led2);
 		}
@@ -1163,7 +963,7 @@ package sched
 			fi
 		}
 			
-		on read from DO to DO do {
+		on read from DO to DO delayable do {
 			value = get_rand(100);
 			if (value > rate) then
 				state = DISABLE;
@@ -1195,193 +995,32 @@ package sched
 			is_channel_busy = DISABLE; 
 		}
 
-		on upload from IDLE to BUSY1 provided (is_channel_busy == DISABLE) do {
+		on upload from IDLE to BUSY1 provided (is_channel_busy == DISABLE)  delayable do {
 			is_channel_busy = ENABLE; 
 			des = get_msg_des(packet);
 			printf("                [Channel-d] des: %d\n", des);
 		}
 
-		on fail from BUSY1 to IDLE provided(state == DISABLE) do{
+		on fail from BUSY1 to IDLE provided(state == DISABLE) delayable do{
 			is_channel_busy = DISABLE; 
 			des = UNDEFINED;
 		}
 
-		on download from BUSY1 to BUSY2 provided(state == ENABLE)
+		on download from BUSY1 to BUSY2 provided(state == ENABLE) delayable
 
-		on done from BUSY2 to IDLE do { 
+		on done from BUSY2 to IDLE delayable do { 
 			is_channel_busy = DISABLE; 
 			des = UNDEFINED;
 		}
 	
 	end
-		
-	compound type SampleNode() 
-		// components
-		component NodeBoot tb(8888)
-    		component TaskScheduler ts(8888, 1)
-		component EventScheduler es(8888)
-
-		// component Timer timer1(111)
-		component Sensor sen1(456)	
-		component Timer timer1(6324, 3, 0)	
-		component SampleApplication app1(1, 2, 2)
-
-		component TaskHandler th_app1_1(), th_app1_2()
-		component EventHandler eh_sen1_data_ready(), eh_timer()
-		component CommandHandler ch_sen1_get_data(7777, 7777)
-
-		component Environment env(0) 
-
-		// System Boot
-		connector Conn2 scheduler_init(
-			tb.sched_init, 
-			ts.init
-		)
-
-		connector Conn2 interrupt_init (
-			tb.enable_interrupt, 
-			es.init
-		)
-		// booted application
-		connector Conn2 app_boot(
-			tb.booted, 
-			app1.booted
-		)
-		// connectors
-		// post task
-		connector Conn3_P post_task1(
-			app1.post, 
-			ts.post, 
-			th_app1_1.init
-		)
-
-		connector Conn3_P post_task2(
-			app1.post,
-			ts.post, 
-			th_app1_2.init
-		)
-		// the link of tasksched and its handler: begin
-		connector Conn3 begin_task1(
-			es.test, 
-			th_app1_1.beg, 
-			ts.beg
-		)
-					
-		connector Conn3 begin_task2(
-			es.test,				
-			th_app1_2.beg, 
-			ts.beg
-		)
-		// the link of tasksched and its handler: finish
-		connector Conn2_Finish fin_task1(
-			th_app1_1.fin, 
-			ts.fin
-		)
-
-		connector Conn2_Finish fin_task2(
-			th_app1_2.fin, 
-			ts.fin
-		)		
-		// the following is for test: meet the basic demanding
-		connector Conn6_Preem test_pree1(
-			es.pre, 
-			th_app1_1.pre, 
-			th_app1_2.pre, 
-			ch_sen1_get_data.pre, 
-			eh_sen1_data_ready.pre, 
-			eh_timer.pre
-		)
-		
-		connector Conn2 test_res1(
-			es.res, 
-			th_app1_1.res
-		)
-
-		connector Conn2 test_res2(
-			es.res, 
-			th_app1_2.res
-		)
-
-		connector Conn2 test_res3(
-			es.res, 
-			ch_sen1_get_data.res
-		)
-
-		connector Conn2 test_res4(
-			es.res, 
-			eh_sen1_data_ready.res
-		)
-
-		connector Conn2 test_res5(
-			es.res, 
-			eh_timer.res
-		)
-		// Command handler :TempRead.read() == SUCCESS
-		connector Conn4_Sen_Begin sen_ch_beg(
-			app1.sig, 
-			ch_sen1_get_data.beg, 
-			sen1.read, 
-			env.read
-		)	
-		connector Conn2_V2  sen_repo(
-			ch_sen1_get_data.fin, 
-			sen1.test
-		)
-		
-		// Sensor sig, it will sig anytime
-		connector Conn4_S sig_event1(
-			sen1.sig, 
-			es.sig, 
-			eh_sen1_data_ready.init, 
-			ch_sen1_get_data.done
-		)
-
-		connector Conn2 begin_event1(
-			eh_sen1_data_ready.beg, 
-			es.beg
-		)
-
-		connector Conn2_Finish_1  fin_event1(
-			eh_sen1_data_ready.fin, 
-			es.fin
-		)
-		// Timer sig, it will sig when expired1, it will signal a Periodic
-		connector Conn2 set_timer1(
-			app1.sig, 
-			timer1.post
-		)
-		connector Conn3_Timer_Sig sig_timer1(
-			timer1.sig, 
-			es.sig, 
-			eh_timer.init
-		)
-
-		connector Conn2 beg_timer1(
-			eh_timer.beg, 
-			es.beg
-		)
-
-		connector Conn3 fin_timer1(
-			eh_timer.fin, 
-			es.fin, 
-			timer1.interval
-		)
-		// extern connector 
-		// make sure tick excute after ts and es is free
-		connector Conn2_V2 ts_es_free(
-			ts.tick, 
-			es.test
-		)
-
-		priority ts_tick_minimal1 ts_es_free: * < * : * provided (es.is_es_idle == 0)
-	end
 
 	compound type BasicMACM (int appid, int desid)
 
 		component NodeBoot tb(appid)
-    		component TaskScheduler ts(appid ,0) // debug: ts disabled
+    		component TaskScheduler ts(appid, 1) // debug: ts disabled
 		component EventScheduler es(appid)
-		component Timer timer1(appid, 0, 0) // debug: not use timer now
+		component Timer_New timer1(appid, 300, 0)
 		component SampleApplication app1(appid, 0, 1) // noting to post and signal once
 		component Sensor sen1(appid)	
 		component Environment env(100)  // scuuess rate
@@ -1394,6 +1033,7 @@ package sched
 		component CH_DataMsg_Send ch_datamsg_send(1001, appid)
 		component EH_DataMsg_SendDone eh_datamsg_senddone(appid)
 		component EH_Recvmsg_Receive eh_recvmsg_receive(appid)
+		component TH_AVG th_avg(appid)
 		
 		// radio
 		component RadioSender sender(appid)
@@ -1487,7 +1127,7 @@ package sched
 			timer1.interval
 		)
 
-		// msg receiver todo
+		// msg receiver
 		connector Conn_Data_Receive conn_data_receive(
 			es.sig,
 			receiver.sig,
@@ -1499,20 +1139,32 @@ package sched
 			eh_recvmsg_receive.beg
 		)
 
-		connector Conn3_Basic conn_recv_eh(
-			es.fin,
+		connector Conn4_Post_Task conn_recv_eh(
 			eh_recvmsg_receive.call,
-			led.led0on
+			led.led0on,
+			th_avg.init,
+			ts.post
 		)
-		
+		// avg temp
+		connector Conn2 begin_task(
+			th_avg.beg, 
+			ts.beg
+		)
+
+		connector Conn3_Finish fin_task1(
+			th_avg.fin, 
+			ts.fin,
+			es.fin
+		)
 		// preem enable
-		connector Conn6_Preem conn_pre(
+		connector Conn7_Preem conn_pre(
 			es.pre,
 			ch_photo_read.pre,
 			eh_photo_readdone.pre,
 			ch_datamsg_send.pre,
 			eh_datamsg_senddone.pre,
-			eh_recvmsg_receive.pre
+			eh_recvmsg_receive.pre,
+			th_avg.pre
 		)
 		// resume
 		connector Conn2 conn_res1(
@@ -1538,15 +1190,12 @@ package sched
 		connector Conn2 conn_res5(
 			es.res,
 			eh_recvmsg_receive.res
-		)
-		// extern connector 
-		// make sure tick excute after ts and es is free
-		connector Conn2_V2 ts_es_free(
-			ts.tick, 
-			es.test
-		)
+		) 
 
-		priority ts_tick_minimal1 ts_es_free: * < * : * provided (es.is_es_idle == 0)	
+		connector Conn2 conn_res6(
+			es.res,
+			th_avg.res
+		)
 
 		export port sender.broadcast as broadcast
 		export port receiver.listen as listen

@@ -241,6 +241,11 @@ int get_msg_des(message_t msg)
     return msg[3];
 }
 
+int get_msg_data(message_t msg)
+{
+    return msg[4];
+}
+
 //  led
 void print_led(int appid, int l0, int l1, int l2) 
 {
