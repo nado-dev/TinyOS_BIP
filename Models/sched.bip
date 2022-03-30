@@ -59,6 +59,10 @@ package sched
 
 	connector type Conn3_Basic (Port_t p1, Port_t p2, Port_t p3) 
 		define p1 p2 p3
+	end
+	
+	connector type Conn4_Basic (Port_t p1, Port_t p2, Port_t p3, Port_t p4) 
+		define p1 p2 p3 p4
 	end	
 
 	connector type Conn3(Port_tv p1, Port_t p2, Port_t p3)
@@ -158,9 +162,9 @@ package sched
 		}
 	end
 
-	connector type Conn_Sen_Ch_Beg (Port_t appsig, Port_t chbeg, Port_t led, Port_tvv senread, Port_tvv envread)
-		define appsig chbeg led senread envread
-		on appsig chbeg led senread envread
+	connector type Conn_Sen_Ch_Beg (Port_t chbeg, Port_t led, Port_tvv senread, Port_tvv envread, Port_t timsig)
+		define chbeg led senread envread timsig
+		on chbeg led senread envread timsig
 		down {
 			senread.v1 = envread.v1;
 			senread.v2 = envread.v2;
@@ -788,7 +792,7 @@ package sched
 		on done from DONE to DONE
 
 	end
-	
+
 	atom type Timer( int timer_id, int expire_in, int is_one_shot) 
 
 		data int count_down = UNDEFINED
@@ -840,6 +844,77 @@ package sched
 			printf("                [Timer] on sig from DONE to INIT\n");
 			// start a interval 
 			count_down = 0;
+		}
+
+		on stop from EXE to INIT do { count_down = 0; }
+
+	end
+
+	atom type Timer_New( int timer_id, int expire_in, int is_one_shot) 
+
+		data int count_down = UNDEFINED
+		data int t = 0
+		data int flag_is_posted = DISABLE
+
+		clock x unit millisecond
+		clock tu unit millisecond
+
+		// port definition
+		export port Port_t post()
+		export port Port_t sig()
+		export port Port_t stop()
+		export port Port_t interval()
+		port Port_t tick()
+		
+		// state definition
+		place INIT, EXE, DONE
+		
+		// interaction definition
+		initial to INIT do { 
+			count_down = 0; 
+			tu' =0; 
+			tu = 1;
+			printf("<<<<<<< %Ld\n", x / tu);
+		}
+	
+		on post from INIT to EXE provided (count_down == 0 && flag_is_posted == DISABLE && is_one_shot == DISABLE)
+		do {
+			flag_is_posted = ENABLE;
+			count_down = expire_in;
+			printf("                [Timer] on post from INIT to EXE, new event set:%d, expire in:%d, timer ID: %d\n", t, expire_in, timer_id);
+			printf("<<<<<<< %Ld\n", x / tu);
+		}
+
+		on interval from INIT to EXE provided (x == 300 && count_down == 0 && flag_is_posted == ENABLE)
+		do {
+			count_down = expire_in;
+			printf("                [Timer] on interval from INIT to EXE, new event set:%d, expire in:%d, timer ID: %d\n", t, expire_in, timer_id);
+			printf("<<<<<<< %Ld\n", x / tu);
+		}
+
+		on tick from EXE to EXE provided (count_down > 0)
+		do {
+			// todo: real time related?
+			printf("                [Timer] on tick from EXE to EXE, remain countdown %d/%d\n", count_down, expire_in);
+			count_down = count_down - 1;
+			printf("<<<<<<< %Ld\n", x / tu);
+		}
+		
+		on sig from EXE to INIT provided (count_down == 0 && is_one_shot == DISABLE)
+		do {
+			printf("                [Timer] on sig from EXE to INIT\n");
+			// start a interval 
+			count_down = 0;
+			x = 0;
+			printf("<<<<<<< %Ld\n", x / tu);
+		}
+
+		on sig from EXE to DONE provided (count_down == 0 && is_one_shot == ENABLE)
+		do {
+			printf("                [Timer] on sig from DONE to INIT\n");
+			// start a interval 
+			count_down = 0;
+			printf("<<<<<<< %Ld\n", x / tu);
 		}
 
 		on stop from EXE to INIT do { count_down = 0; }
@@ -1126,7 +1201,7 @@ package sched
 			printf("                [Channel-d] des: %d\n", des);
 		}
 
-		on fail from BUSY1 to IDLE do{
+		on fail from BUSY1 to IDLE provided(state == DISABLE) do{
 			is_channel_busy = DISABLE; 
 			des = UNDEFINED;
 		}
@@ -1306,7 +1381,7 @@ package sched
 		component NodeBoot tb(appid)
     		component TaskScheduler ts(appid ,0) // debug: ts disabled
 		component EventScheduler es(appid)
-		component Timer timer1(appid, 1, 0) // debug: not use timer now
+		component Timer timer1(appid, 0, 0) // debug: not use timer now
 		component SampleApplication app1(appid, 0, 1) // noting to post and signal once
 		component Sensor sen1(appid)	
 		component Environment env(100)  // scuuess rate
@@ -1335,17 +1410,18 @@ package sched
 			es.init
 		)
 		// boot application
-		connector Conn2 app_boot(
+		connector Conn3_Basic app_boot(
 			tb.booted, 
-			app1.booted
+			app1.booted,
+			timer1.post
 		)
 
 		connector Conn_Sen_Ch_Beg conn_sen_ch_beg(
-			app1.sig, 
 			ch_photo_read.beg,
 			led.led1on,
 			sen1.read, 
-			env.read
+			env.read,
+			timer1.sig
 		)	
 		
 		connector Conn_Sig_Photo_Read conn_sig_photo_read(
@@ -1398,15 +1474,17 @@ package sched
 			eh_datamsg_senddone.beg
 		)
 
-		connector Conn3_Basic conn_datamsg_senddone_call(
+		connector Conn4_Basic conn_datamsg_senddone_call(
 			es.fin,
 			eh_datamsg_senddone.call,
-			led.led2off
+			led.led2off,
+			timer1.interval
 		)
 		// may send failed
-		connector Conn2 conn_datamsg_senddone_fail(
+		connector Conn3_Basic conn_datamsg_senddone_fail(
 			es.fin,
-			eh_datamsg_senddone.fail
+			eh_datamsg_senddone.fail,
+			timer1.interval
 		)
 
 		// msg receiver todo
