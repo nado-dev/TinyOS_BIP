@@ -65,15 +65,10 @@ package sched
 	connector type Conn4_Basic (Port_t p1, Port_t p2, Port_t p3, Port_t p4) 
 		define p1 p2 p3 p4
 	end	
-
-	connector type Conn3(Port_tv p1, Port_t p2, Port_t p3)
-		define p1 p2 p3
-	end
 	
 	connector type Conn4_Sen_Begin (Port_t appsig, Port_t combeg, Port_tvv s_r, Port_tvv envread)
 		define appsig combeg s_r envread
 		on appsig combeg s_r envread
-		provided (envread.v1 != UNDEFINED && envread.v2 != UNDEFINED)
 		down {
 			s_r.v1 = envread.v1;
 			s_r.v2 = envread.v2;
@@ -147,20 +142,6 @@ package sched
 			
 	end
 
-	// signal
-	connector type Conn4_S(Port_tv3 sen ,Port_tv es, Port_tv3 eh, Port_t ch_done)
-		define sen es eh ch_done
-		on sen es eh ch_done
-		provided (eh.v1 == 0)
-		down {
-			eh.v1 = get_rand(255); 
-			eh.v2 = sen.v2;
-			eh.v3 = sen.v3;
-			sen.v1 = eh.v1;
-			es.v = eh.v1;	
-		}
-	end
-
 	connector type Conn_Sen_Ch_Beg (Port_t chbeg, Port_t led, Port_tvv senread, Port_tvv envread, Port_t timsig)
 		define chbeg led senread envread timsig
 		on chbeg led senread envread timsig
@@ -225,7 +206,7 @@ package sched
 				// failed
 				chan.v2 = DISABLE;
 				snd.v = DISABLE;
-				printf("                [Sender] send failed, stop.\n");
+				printf("                [Sender-Conn_CSMACA_UP] send failed, stop.\n");
 			else
 				chan.v2 = ENABLE;
 				chan.msg = snd.msg;
@@ -301,7 +282,8 @@ package sched
 			temp = UNDEFINED;
 		}
 
-    		on fin from BUSY to FREE delayable do {
+    		on fin from BUSY to FREE delayable 
+		do {
 			flag_is_running = DISABLE;
 			printf("                [TS] on fin from BUSY to FREE do tc:%d\n", task_count);
 			tid = UNDEFINED;
@@ -314,10 +296,9 @@ package sched
 		// variable difination
 		data int e_count = UNDEFINED
 		data int stack_size = UNDEFINED
-		export data int is_es_idle = DISABLE
 		data int eid = UNDEFINED
 		data int popped_id = UNDEFINED
-
+		export data int is_es_idle = DISABLE
 		// exported port defination
 		export port Port_t init()
 		export port Port_t beg()
@@ -333,7 +314,8 @@ package sched
 		// behaviour defination
 		initial to INIT
 
-		on init from INIT to IDLE delayable do {
+		on init from INIT to IDLE delayable 
+		do {
 			create_stack(did, 255);
 			is_es_idle = ENABLE;
 			e_count = 0;
@@ -349,12 +331,14 @@ package sched
 			printf("                [ES] on sig from IDLE to ACCEPT, ec: %d, ss: %d\n", e_count, stack_size);
 		} 
 
-		on pre from ACCEPT to PREEMPT delayable do {
+		on pre from ACCEPT to PREEMPT delayable 
+		do {
 			stack_size = get_size(did);
 			printf("                [ES] on pre from ACCEPT to PREEMPT, ec: %d, ss: %d\n", e_count, stack_size);
 		}
 
-		on beg from PREEMPT to BUSY1 delayable do {
+		on beg from PREEMPT to BUSY1 delayable 
+		do {
 			stack_size = get_size(did);
 			e_count = e_count + 1;
 			printf("                [ES] on beg from PREEMPT to BUSY1, ec: %d, ss: %d\n", e_count, stack_size);
@@ -424,9 +408,9 @@ package sched
 		on fin from EXE to IDLE delayable do {
 			temp = get_msg_data(msg);
 			if(temp > 0) then
-				avg_temperature = ((avg_temperature * counter) + temp) / (counter + 1);
+				avg_temperature = ((avg_temperature * counter) + temp) / (counter + 1);		
+				printf("                [TH_AVG] recevied temperature: %d, avg temp is %d, totally %d\n", temp, avg_temperature, counter);
 				counter = counter + 1;
-				printf("                [TH_AVG] recevied temperature: %d, avg temp is %d\n", temp, avg_temperature);
 			fi
 		}
 
@@ -625,7 +609,7 @@ package sched
  
 		// send data failed
 		on fail from EXE to IDLE provided (flag_error == DISABLE) delayable
-		do { printf("	[Exception] Send failed! from did: %d", appid); }
+		do { printf("	[EH_DataMsg_SendDone-Exception] Send failed! from did: %d", appid); }
 
 		on pre from EXE to SUSP delayable
 
@@ -693,7 +677,7 @@ package sched
 	
 		on post from INIT to EXE provided (flag_is_posted == DISABLE && is_one_shot == DISABLE) delayable
 		do {
-			printf("<<<<<<<[post] %Ld\n", x / tu);
+			printf("		[Timer]<<<<<<<[post] %Ld\n", x / tu);
 			flag_is_posted = ENABLE;
 			x = 0;
 			
@@ -701,7 +685,7 @@ package sched
 
 		on interval from INIT to EXE provided (x == expire_in && flag_is_posted == ENABLE) delayable
 		do {
-			printf("<<<<<<<[interval] %Ld\n", x / tu);
+			printf("                         [Timer]<<<<<<<[interval] %Ld\n", x / tu);
 			x = 0;
 		}
 
@@ -709,15 +693,14 @@ package sched
 		on sig from EXE to INIT provided (is_one_shot == DISABLE) delayable
 		do {
 			// start a interval 
-			printf("<<<<<<<[sig] %Ld\n", x / tu);
+			printf("                         [Timer]<<<<<<<[sig] %Ld\n", x / tu);
 			x = 0;
 		}
 
 		on sig from EXE to DONE provided (is_one_shot == ENABLE) delayable
 
-		on stop from EXE to INIT delayable do { 
-			x = 0;
-		}
+		on stop from EXE to INIT delayable 
+		do { x = 0;	}
 
 	end
 
@@ -734,28 +717,28 @@ package sched
 		export port Port_tv test(is_idle)
 	
 		// state definition
-		place EXE1, EXE2
+		place E1, E2
 
-		initial to EXE1 do {
+		initial to E1 do {
 			sid = _sid;
 			is_idle = ENABLE;
 			read_value = DISABLE;
 			read_state = DISABLE;
 		}
 
-		on read from EXE1 to EXE2 delayable do{
+		on read from E1 to E2 delayable do{
 			is_idle = ENABLE;
 			printf("                [Sensor] on beg from EXE1 to EXE2, sid: %d\n", sid);
 		}
 
-		on sig from EXE2 to EXE1 delayable do {	
+		on sig from E2 to E1 delayable do {	
 			is_idle = DISABLE;
 			printf("                [Sensor] on sig from EXE2 to EXE1, sid: %d\n", sid);
 		}
 
-		on test from EXE1 to EXE1 delayable
+		on test from E1 to E1 delayable
 		
-		on test from EXE2 to EXE2 delayable
+		on test from E2 to E2 delayable
 
 	end
 
@@ -774,6 +757,7 @@ package sched
 		initial to NE
 
 		on sched_init from NE to SI delayable do {
+			init_seed();
 			printf("                [TOS_BOOT] from node %d, 1. scheduler init\n", appid);
 		}
 
@@ -814,14 +798,11 @@ package sched
 		initial to BOOT
 
 		on booted from BOOT to INIT do {
-			init_seed();
 			appid = _appid;
 			printf("                [UA] APP %d init\n", appid);
 		}
 
-		on start from INIT to RUNNING do {
-			printf("                [UA] APP %d begins running\n", appid);
-		}
+		on start from INIT to RUNNING
 
 		on post from RUNNING to RUNNING provided(posted_task_count < task_count)
 		do {
